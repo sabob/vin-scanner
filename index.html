@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VIN Scanner (Simple)</title>
+  <title>VIN Scanner (Optimized)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <style>
+    /* General Styling */
     * {
       box-sizing: border-box;
     }
@@ -25,15 +26,20 @@
       text-align: center;
     }
 
+    /* Main Content Area */
     #mainContent {
       width: 100%;
       max-width: 480px;
       padding-bottom: 120px; /* space for button */
     }
 
+    /* Camera Container with ROI Overlay */
     #container {
       width: 100%;
+      position: relative; /* Needed for absolute positioning of #vinScanArea */
       margin-top: 1rem;
+      border-radius: 12px;
+      overflow: hidden; /* Ensures video/placeholder don't exceed rounded corners */
     }
 
     #videoPlaceholder {
@@ -53,9 +59,25 @@
       width: 100%;
       aspect-ratio: 16/9;
       border-radius: 12px;
-      display: none; /* Keep this to hide it until camera starts */
+      display: none; /* Hidden until camera starts */
     }
 
+    /* VIN Scan Area Overlay (The key visual guide for OCR) */
+    #vinScanArea {
+      position: absolute;
+      /* Position to cover roughly where a VIN would be on a car/document */
+      top: 40%; /* Adjust these values to center the ROI vertically */
+      left: 10%;
+      width: 80%;
+      height: 20%; /* Keep it relatively flat for a single line of VIN */
+      border: 3px solid #ffc107; /* Bright, noticeable border */
+      border-radius: 4px;
+      z-index: 2; /* Ensures it's above the video */
+      pointer-events: none; /* Allows mouse/touch events to pass through to elements below */
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Dim surrounding area */
+    }
+
+    /* VIN Result Display */
     #vinBox {
       font-weight: bold;
       font-size: 1.4rem;
@@ -66,35 +88,39 @@
       background: white;
       border: 1px solid #28a745;
       padding: 0.75rem;
-      /* REMOVED: display: none; */ /* Make it always visible */
       border-radius: 6px;
-      min-height: 50px; /* Give it some minimum height even when empty */
-      display: flex; /* Use flexbox for centering content vertically/horizontally */
+      min-height: 50px; /* Ensures it always takes up space */
+      display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
-      flex-direction: column; /* Stack VIN and confidence */
     }
 
-    #vinBox p { /* Style for text inside vinBox */
+    #vinBox p {
         margin: 0;
         padding: 0;
+        word-break: break-all; /* Helps long VINs fit */
     }
 
     #vinBox small {
         font-size: 0.8em;
         color: #555;
+        margin-top: 5px;
     }
 
+    /* Captured Image Display */
     #capturedImage {
-      display: none;
+      display: none; /* Hidden until a snapshot is taken */
       margin-top: 1rem;
       border: 2px solid #28a745;
       border-radius: 6px;
       max-width: 100%;
       width: 100%;
       height: auto;
+      object-fit: contain; /* Ensures the image fits without distortion */
     }
 
+    /* Toggle Scan Button */
     button#toggleScanBtn {
       position: fixed;
       bottom: 2rem;
@@ -111,6 +137,11 @@
       color: white;
       box-shadow: 0 0 12px rgba(255, 0, 0, 0.8);
       z-index: 10;
+      transition: background-color 0.3s ease; /* Smooth transition for color change */
+    }
+
+    button#toggleScanBtn.scanning {
+        background-color: orange; /* Indicate scanning state */
     }
 
     @media (min-width: 600px) {
@@ -128,10 +159,10 @@
   <div id="container">
     <div id="videoPlaceholder">Camera will appear here</div>
     <video id="video" autoplay playsinline></video>
-  </div>
+    <div id="vinScanArea"></div> </div>
 
   <div id="vinBox">
-    <p>Scan to find VIN</p>
+    <p>Point camera at VIN and press Start</p>
   </div>
   <img id="capturedImage" alt="Captured Frame" />
 </div>
@@ -144,26 +175,30 @@
   const vinBox = document.getElementById('vinBox');
   const capturedImageEl = document.getElementById('capturedImage');
   const placeholder = document.getElementById('videoPlaceholder');
+  const vinScanArea = document.getElementById('vinScanArea');
 
   let stream = null;
   let cameraOn = false;
+  let isScanning = false; // To prevent multiple scans while one is in progress
 
   async function startCamera() {
     if (!stream) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: 1280, height: 720 },
+          video: { facingMode: "environment", width: 1280, height: 720 }, // High resolution for better OCR
           audio: false
         });
         video.srcObject = stream;
         video.style.display = 'block';
         placeholder.style.display = 'none';
+        vinScanArea.style.display = 'block'; // Show the VIN scan area overlay
         cameraOn = true;
         toggleBtn.textContent = "Scan";
-        vinBox.innerHTML = '<p>Point camera at VIN and press Scan</p>'; // Reset VIN box message
+        vinBox.innerHTML = '<p>Align VIN with the yellow box</p>';
         capturedImageEl.style.display = 'none'; // Hide previous snapshot
       } catch (err) {
-        alert("Camera permission denied: " + err.message);
+        alert("Camera permission denied: " + err.message + "\nPlease grant camera access to use the scanner.");
+        console.error("Camera access error:", err);
         return false;
       }
     }
@@ -171,36 +206,75 @@
   }
 
   async function scanFrame() {
-    // Clear previous VIN and image
+    if (isScanning) return; // Prevent concurrent scans
+    isScanning = true;
+    toggleBtn.classList.add('scanning'); // Change button style
+    toggleBtn.textContent = "Scanning..."; // Update button text
+
     vinBox.innerHTML = '<p>Scanning...</p>';
-    capturedImageEl.style.display = 'none';
+    capturedImageEl.style.display = 'none'; // Hide previous image during new scan
 
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Get video dimensions and position
+    const videoRect = video.getBoundingClientRect();
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
+
+    // Get scan area element and its dimensions relative to the viewport
+    const scanAreaRect = vinScanArea.getBoundingClientRect();
+
+    // Calculate the crop coordinates relative to the *video's intrinsic resolution*
+    // This correctly accounts for CSS scaling of the video element.
+    const scaleX = videoWidth / videoRect.width;
+    const scaleY = videoHeight / videoRect.height;
+
+    const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
+    const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
+    const cropWidth = scanAreaRect.width * scaleX;
+    const cropHeight = scanAreaRect.height * scaleY;
+
+    // Set canvas dimensions to the cropped area
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+
+    // Draw only the cropped region of the video onto the new canvas
+    ctx.drawImage(
+      video,
+      cropX, cropY, cropWidth, cropHeight, // Source rectangle (x, y, width, height from video)
+      0, 0, cropWidth, cropHeight          // Destination rectangle (x, y, width, height on canvas)
+    );
 
     capturedImageEl.src = canvas.toDataURL("image/png");
-    capturedImageEl.style.display = 'block';
+    capturedImageEl.style.display = 'block'; // Show the captured image for verification
 
     try {
+      // Initialize Tesseract worker if not already done (optional, can be moved to startCamera)
+      // For this single-scan setup, it's fine here, Tesseract.recognize handles worker creation
       const result = await Tesseract.recognize(canvas, 'eng', {
+        // Only allow VIN characters (uppercase letters and numbers excluding I, O, Q)
         tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
+        // PSM 7: Treat the image as a single text line (good for VINs)
+        // PSM 8: Treat the image as a single word (also worth experimenting with if 7 struggles)
         psm: 7
       });
 
       const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
       if (vinMatch) {
         const vin = vinMatch[0];
-        const confidence = result.data.confidence.toFixed(1);
+        const confidence = result.data.confidence ? result.data.confidence.toFixed(1) : 'N/A';
         vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
       } else {
-        vinBox.innerHTML = `<p>No VIN found.</p><small>Try again with clearer image.</small>`;
+        vinBox.innerHTML = `<p>No VIN found.</p><small>Try aligning the VIN better.</small>`;
       }
     } catch (e) {
       console.error("OCR error:", e);
-      vinBox.innerHTML = `<p style="color: red;">Error during scan.</p>`;
+      vinBox.innerHTML = `<p style="color: red;">OCR Error: ${e.message || 'Check console.'}</p>`;
+    } finally {
+      isScanning = false;
+      toggleBtn.classList.remove('scanning');
+      toggleBtn.textContent = "Scan"; // Restore button text
     }
   }
 
@@ -213,9 +287,15 @@
     }
   });
 
+  // Stop camera stream when the page is closed or navigated away from
   window.addEventListener('beforeunload', () => {
-    if (stream) stream.getTracks().forEach(track => track.stop());
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
   });
+
+  // Optional: Add a simple debounce for continuous scanning if desired (not implemented here)
+  // Or, a button to stop the camera completely if needed
 </script>
 
 </body>
