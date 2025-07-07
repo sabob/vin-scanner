@@ -2,151 +2,254 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VIN Scanner (Optimized)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>VIN Scanner (Corrected Order)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <style>
-    /* General Styling */
-    * {
+    /* Global Reset & Box-Sizing */
+    *, *::before, *::after {
       box-sizing: border-box;
+      /* outline: 1px solid rgba(255, 0, 0, 0.3); /* Temporary for debugging */
     }
     body {
       font-family: sans-serif;
-      padding: 1rem;
       margin: 0;
       background: #f5f5f5;
       display: flex;
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
+      padding: 0.5rem; /* Mobile-first padding */
       position: relative;
+      width: 100%;
+      overflow-x: hidden;
     }
 
     h2 {
       margin-top: 1rem;
       text-align: center;
+      width: 100%;
     }
 
     /* Main Content Area */
     #mainContent {
       width: 100%;
-      max-width: 480px;
-      padding-bottom: 120px; /* space for button */
+      max-width: 480px; /* Constrain width on all screens */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-grow: 1;
+      min-width: 0;
     }
 
     /* Camera Container with ROI Overlay */
     #container {
       width: 100%;
-      position: relative; /* Needed for absolute positioning of #vinScanArea */
+      aspect-ratio: 16 / 9;
+      position: relative;
       margin-top: 1rem;
       border-radius: 12px;
-      overflow: hidden; /* Ensures video/placeholder don't exceed rounded corners */
+      overflow: hidden;
+      background: #e9e9e9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: 3px dashed #aaa;
     }
 
     #videoPlaceholder {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      aspect-ratio: 16/9;
-      border: 3px dashed #aaa;
-      border-radius: 12px;
+      height: 100%;
       display: flex;
       justify-content: center;
       align-items: center;
       color: #555;
       font-size: 1.1rem;
-      background: #e9e9e9;
+      z-index: 1;
     }
 
     video {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 100%;
-      aspect-ratio: 16/9;
+      height: 100%;
+      object-fit: cover;
       border-radius: 12px;
-      display: none; /* Hidden until camera starts */
+      display: none;
+      z-index: 0;
     }
 
-    /* VIN Scan Area Overlay (The key visual guide for OCR) */
+    /* VIN Scan Area Overlay */
     #vinScanArea {
       position: absolute;
-      /* Position to cover roughly where a VIN would be on a car/document */
-      top: 40%; /* Adjust these values to center the ROI vertically */
-      left: 10%;
-      width: 80%;
-      height: 20%; /* Keep it relatively flat for a single line of VIN */
-      border: 3px solid #ffc107; /* Bright, noticeable border */
+      top: 35%;
+      left: 5%;
+      width: 90%;
+      height: 30%;
+      border: 3px solid #ffc107;
       border-radius: 4px;
-      z-index: 2; /* Ensures it's above the video */
-      pointer-events: none; /* Allows mouse/touch events to pass through to elements below */
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Dim surrounding area */
+      z-index: 2;
+      pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+      display: none;
     }
 
-    /* VIN Result Display */
+    /* VIN Result Display (GREEN BLOCK) - NOW FIRST AFTER CAMERA */
     #vinBox {
       font-weight: bold;
-      font-size: 1.4rem;
+      font-size: 1.2rem;
       color: #28a745;
-      margin-top: 1rem;
+      margin-top: 1.5rem; /* Space below camera */
       white-space: pre-wrap;
       text-align: center;
       background: white;
       border: 1px solid #28a745;
       padding: 0.75rem;
       border-radius: 6px;
-      min-height: 50px; /* Ensures it always takes up space */
+      min-height: 50px;
+      width: 100%;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      overflow-wrap: break-word;
+      min-width: 0;
     }
 
     #vinBox p {
         margin: 0;
         padding: 0;
-        word-break: break-all; /* Helps long VINs fit */
+        max-width: 100%;
     }
 
     #vinBox small {
-        font-size: 0.8em;
+        font-size: 0.7em;
         color: #555;
         margin-top: 5px;
     }
 
-    /* Captured Image Display */
-    #capturedImage {
-      display: none; /* Hidden until a snapshot is taken */
-      margin-top: 1rem;
-      border: 2px solid #28a745;
-      border-radius: 6px;
-      max-width: 100%;
-      width: 100%;
-      height: auto;
-      object-fit: contain; /* Ensures the image fits without distortion */
-    }
-
-    /* Toggle Scan Button */
+    /* Scan Button (RED BUTTON) - NOW SECOND AFTER VIN BOX */
     button#toggleScanBtn {
-      position: fixed;
-      bottom: 2rem;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 90px;
-      height: 90px;
+      margin-top: 1.5rem; /* Space below VIN box */
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
       font-weight: bold;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       cursor: pointer;
       border: none;
       background-color: red;
       color: white;
-      box-shadow: 0 0 12px rgba(255, 0, 0, 0.8);
-      z-index: 10;
-      transition: background-color 0.3s ease; /* Smooth transition for color change */
+      box-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
+      transition: background-color 0.3s ease;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     button#toggleScanBtn.scanning {
-        background-color: orange; /* Indicate scanning state */
+        background-color: orange;
+    }
+
+    /* View Snapshot Button - DEEMPHASIZED */
+    #viewSnapshotBtn {
+        display: none;
+        margin-top: 0.75rem; /* Space below red button */
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+        font-weight: normal;
+        color: #555;
+        background-color: #e0e0e0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+    }
+    #viewSnapshotBtn:hover {
+        background-color: #d0d0d0;
+        color: #333;
+        border-color: #bbb;
+    }
+
+
+    /* --- Modal Styles --- */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      max-width: 90%;
+      max-height: 90%;
+      overflow-y: auto;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .modal-content img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-top: 1rem;
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 2rem;
+      font-weight: bold;
+      color: #333;
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+    .modal-close:hover {
+      color: #000;
+    }
+
+    /* --- Media Queries for Larger Screens --- */
+
+    @media (min-width: 480px) {
+      body {
+        padding: 1rem;
+      }
+      button#toggleScanBtn {
+        width: 90px;
+        height: 90px;
+        font-size: 1.2rem;
+      }
+      #viewSnapshotBtn {
+        font-size: 1rem; /* Slightly larger on desktop */
+        padding: 0.7rem 1.5rem; /* Restore desktop padding */
+      }
     }
 
     @media (min-width: 600px) {
-      button#toggleScanBtn {
-        bottom: 2rem;
+      #vinBox {
+        font-size: 1.4rem;
+      }
+      #vinBox small {
+        font-size: 0.8em;
       }
     }
   </style>
@@ -159,43 +262,64 @@
   <div id="container">
     <div id="videoPlaceholder">Camera will appear here</div>
     <video id="video" autoplay playsinline></video>
-    <div id="vinScanArea"></div> </div>
+    <div id="vinScanArea"></div>
+  </div>
 
   <div id="vinBox">
     <p>Point camera at VIN and press Start</p>
   </div>
-  <img id="capturedImage" alt="Captured Frame" />
+
+  <button id="toggleScanBtn">Start</button>
+
+  <button id="viewSnapshotBtn">View Snapshot</button>
 </div>
 
-<button id="toggleScanBtn">Start</button>
+<div id="snapshotModal" class="modal-overlay">
+  <div class="modal-content">
+    <button class="modal-close" aria-label="Close modal">&times;</button>
+    <h3>Captured Snapshot</h3>
+    <img id="modalCapturedImage" alt="Captured Frame" />
+    <p>This is the image used for the last VIN scan.</p>
+  </div>
+</div>
+
 
 <script>
   const toggleBtn = document.getElementById('toggleScanBtn');
   const video = document.getElementById('video');
   const vinBox = document.getElementById('vinBox');
-  const capturedImageEl = document.getElementById('capturedImage');
+  const modalCapturedImageEl = document.getElementById('modalCapturedImage');
   const placeholder = document.getElementById('videoPlaceholder');
   const vinScanArea = document.getElementById('vinScanArea');
 
+  const viewSnapshotBtn = document.getElementById('viewSnapshotBtn');
+  const snapshotModal = document.getElementById('snapshotModal');
+  const modalCloseBtn = snapshotModal.querySelector('.modal-close');
+
   let stream = null;
   let cameraOn = false;
-  let isScanning = false; // To prevent multiple scans while one is in progress
+  let isScanning = false;
 
   async function startCamera() {
     if (!stream) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: 1280, height: 720 }, // High resolution for better OCR
+          video: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
           audio: false
         });
         video.srcObject = stream;
         video.style.display = 'block';
         placeholder.style.display = 'none';
-        vinScanArea.style.display = 'block'; // Show the VIN scan area overlay
+        vinScanArea.style.display = 'block';
         cameraOn = true;
         toggleBtn.textContent = "Scan";
         vinBox.innerHTML = '<p>Align VIN with the yellow box</p>';
-        capturedImageEl.style.display = 'none'; // Hide previous snapshot
+        viewSnapshotBtn.style.display = 'none';
+        modalCapturedImageEl.src = '';
       } catch (err) {
         alert("Camera permission denied: " + err.message + "\nPlease grant camera access to use the scanner.");
         console.error("Camera access error:", err);
@@ -206,57 +330,45 @@
   }
 
   async function scanFrame() {
-    if (isScanning) return; // Prevent concurrent scans
+    if (isScanning) return;
     isScanning = true;
-    toggleBtn.classList.add('scanning'); // Change button style
-    toggleBtn.textContent = "Scanning..."; // Update button text
+    toggleBtn.classList.add('scanning');
+    toggleBtn.textContent = "Scanning...";
 
     vinBox.innerHTML = '<p>Scanning...</p>';
-    capturedImageEl.style.display = 'none'; // Hide previous image during new scan
+    viewSnapshotBtn.style.display = 'none';
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Get video dimensions and position
     const videoRect = video.getBoundingClientRect();
-    const videoWidth = video.videoWidth;
-    const videoHeight = video.videoHeight;
+    const videoIntrinsicWidth = video.videoWidth;
+    const videoIntrinsicHeight = video.videoHeight;
 
-    // Get scan area element and its dimensions relative to the viewport
     const scanAreaRect = vinScanArea.getBoundingClientRect();
 
-    // Calculate the crop coordinates relative to the *video's intrinsic resolution*
-    // This correctly accounts for CSS scaling of the video element.
-    const scaleX = videoWidth / videoRect.width;
-    const scaleY = videoHeight / videoRect.height;
+    const scaleX = videoIntrinsicWidth / videoRect.width;
+    const scaleY = videoIntrinsicHeight / videoRect.height;
 
     const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
     const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
     const cropWidth = scanAreaRect.width * scaleX;
     const cropHeight = scanAreaRect.height * scaleY;
 
-    // Set canvas dimensions to the cropped area
     canvas.width = cropWidth;
     canvas.height = cropHeight;
 
-    // Draw only the cropped region of the video onto the new canvas
     ctx.drawImage(
       video,
-      cropX, cropY, cropWidth, cropHeight, // Source rectangle (x, y, width, height from video)
-      0, 0, cropWidth, cropHeight          // Destination rectangle (x, y, width, height on canvas)
+      cropX, cropY, cropWidth, cropHeight,
+      0, 0, cropWidth, cropHeight
     );
 
-    capturedImageEl.src = canvas.toDataURL("image/png");
-    capturedImageEl.style.display = 'block'; // Show the captured image for verification
+    modalCapturedImageEl.src = canvas.toDataURL("image/png");
 
     try {
-      // Initialize Tesseract worker if not already done (optional, can be moved to startCamera)
-      // For this single-scan setup, it's fine here, Tesseract.recognize handles worker creation
       const result = await Tesseract.recognize(canvas, 'eng', {
-        // Only allow VIN characters (uppercase letters and numbers excluding I, O, Q)
         tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-        // PSM 7: Treat the image as a single text line (good for VINs)
-        // PSM 8: Treat the image as a single word (also worth experimenting with if 7 struggles)
         psm: 7
       });
 
@@ -265,16 +377,19 @@
         const vin = vinMatch[0];
         const confidence = result.data.confidence ? result.data.confidence.toFixed(1) : 'N/A';
         vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
+        viewSnapshotBtn.style.display = 'block';
       } else {
         vinBox.innerHTML = `<p>No VIN found.</p><small>Try aligning the VIN better.</small>`;
+        viewSnapshotBtn.style.display = 'block';
       }
     } catch (e) {
       console.error("OCR error:", e);
       vinBox.innerHTML = `<p style="color: red;">OCR Error: ${e.message || 'Check console.'}</p>`;
+      viewSnapshotBtn.style.display = 'block';
     } finally {
       isScanning = false;
       toggleBtn.classList.remove('scanning');
-      toggleBtn.textContent = "Scan"; // Restore button text
+      toggleBtn.textContent = "Scan";
     }
   }
 
@@ -287,15 +402,26 @@
     }
   });
 
-  // Stop camera stream when the page is closed or navigated away from
   window.addEventListener('beforeunload', () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
   });
 
-  // Optional: Add a simple debounce for continuous scanning if desired (not implemented here)
-  // Or, a button to stop the camera completely if needed
+  // --- Modal Logic ---
+  viewSnapshotBtn.addEventListener('click', () => {
+    snapshotModal.style.display = 'flex';
+  });
+
+  modalCloseBtn.addEventListener('click', () => {
+    snapshotModal.style.display = 'none';
+  });
+
+  snapshotModal.addEventListener('click', (event) => {
+    if (event.target === snapshotModal) {
+      snapshotModal.style.display = 'none';
+    }
+  });
 </script>
 
 </body>
