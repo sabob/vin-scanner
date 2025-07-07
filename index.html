@@ -3,8 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VIN Scanner (Production Ready)</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <title>VIN Scanner (Self-Hosted Tesseract)</title>
+
+  <script src="./tesseract_local/tesseract.min.js"></script>
+
   <style>
     /* Global Reset & Box-Sizing */
     *, *::before, *::after {
@@ -159,7 +161,7 @@
 
     /* Debugging Elements - Hidden by default for production */
     #debugCanvas, #debugImg {
-      display: none; /* Set to 'display: block;' for debugging */
+      display: none; /* Set to 'display: block;' for debugging visuals of captured frame */
       margin-top: 1rem;
       border: 2px dashed purple;
       max-width: 100%;
@@ -168,7 +170,7 @@
       background: #eee;
     }
     #debugOutput {
-      display: none; /* Set to 'display: block;' for debugging */
+      display: none; /* Set to 'display: block;' for debugging text logs */
       margin-top: 1rem;
       background: #fff;
       border: 1px solid #ddd;
@@ -234,6 +236,10 @@
 
   const debugOutput = document.getElementById('debugOutput');
   // NOTE: debugCanvas and debugImg are left here but their usage is commented out in performAutoScan()
+  // If you want to visualize the captured frame for debugging,
+  // 1. Set #debugCanvas and #debugImg to 'display: block;' in the CSS.
+  // 2. Uncomment the debugCanvas/debugCtx/debugImg declarations below.
+  // 3. Uncomment the debugCtx.drawImage and debugImg.src lines in performAutoScan().
   // const debugCanvas = document.getElementById('debugCanvas');
   // const debugCtx = debugCanvas.getContext('2d');
   // const debugImg = document.getElementById('debugImg');
@@ -268,30 +274,25 @@
       vinBox.innerHTML = '<p style="color: blue;">Loading scanner engine...</p>'; // User feedback
 
       try {
-          // --- Tesseract.js Configuration ---
-          // IMPORTANT: If you consistently get 'TypeError: Cannot read properties of null (reading 'SetVariable')'
-          // and network tab shows failed downloads for .wasm or .traineddata.gz files,
-          // it means your environment is blocking CDN access.
-          // In that case, you MUST self-host these files and set corePath/langPath here.
-          //
-          // 1. Download:
-          //    - https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract-core.wasm
-          //    - https://cdn.jsdelivr.net/npm/tesseract.js@4/lang-data/eng.traineddata.gz
-          // 2. Place them in your web server's accessible directories, e.g.:
-          //    - /path/to/your/app/tesseract-files/dist/tesseract-core.wasm
-          //    - /path/to/your/app/tesseract-files/lang-data/eng.traineddata.gz
-          // 3. Uncomment and adjust the paths below:
-          // const workerConfig = {
-          //     corePath: './tesseract-files/dist/tesseract-core.wasm', // Path to WASM file
-          //     langPath: './tesseract-files/lang-data',             // Path to directory containing language files
-          //     logger: m => logTesseractProgress(m)
-          // };
-          // For CDN (default):
+          // --- Tesseract.js Configuration for Self-Hosting ---
+          // Make sure these paths are correct relative to your scan2.html file.
+          // Example structure:
+          // your-project-folder/
+          // ├── scan2.html
+          // └── tesseract_local/a
+          //     ├── tesseract.min.js
+          //     ├── worker.min.js
+          //     ├── tesseract-core.wasm
+          //     └── lang-data/
+          //         └── eng.traineddata.gz
           const workerConfig = {
-              logger: m => logTesseractProgress(m)
+              corePath: './tesseract_local/tesseract-core.wasm', // Path to the WebAssembly core engine file
+              langPath: './tesseract_local/lang-data',           // Path to the directory containing eng.traineddata.gz
+              workerPath: './tesseract_local/worker.min.js',     // Explicitly define the path to the Tesseract.js Web Worker script
+              logger: m => logTesseractProgress(m)               // Custom logger for debugging progress
           };
 
-          worker = await Tesseract.createWorker('eng', 1, workerConfig);
+          worker = await Tesseract.createWorker('eng', 1, workerConfig); // 'eng' is the language code
           logDebug('Tesseract worker created successfully. Now setting parameters.');
 
           // Critical check: Ensure worker is not null BEFORE setting parameters
@@ -501,7 +502,7 @@
     );
 
     // --- DEBUGGING VISUALS (UNCOMMENT TO USE IF NEEDED) ---
-    // If you need to see the captured frame, set #debugCanvas and #debugImg to 'display: block;' in CSS
+    // Uncomment debugCanvas/debugCtx/debugImg declarations near the top if you uncomment these.
     // debugCanvas.width = canvas.width;
     // debugCanvas.height = canvas.height;
     // debugCtx.drawImage(canvas, 0, 0);
