@@ -1,86 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>VIN Scanner</title>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-<style>
-  body {
-    font-family: sans-serif;
-    padding: 1rem;
-    margin: 0;
-    background: #f5f5f5;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  #container {
-    position: relative;
-    max-width: 480px;
-    width: 100%;
-    margin-top: 1rem;
-  }
-  video {
-    display: block;
-    width: 100%;
-    height: auto;
-    border: 1px solid #000;
-    background: black;
-  }
-  #vinBox {
-    font-weight: bold;
-    font-size: 1.4rem;
-    color: #28a745; /* Nice green */
-    margin-top: 1rem;
-    white-space: pre-wrap;
-    text-align: center;
-    background: white;
-    border: 1px solid #28a745;
-    padding: 0.75rem;
-    display: none;
-    border-radius: 6px;
-  }
-  #capturedImage {
-    display: none;
-    margin: 1rem auto;
-    border: 1px solid black;
-    max-width: 100%;
-    background: white;
-  }
-  button#toggleScanBtn {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    font-weight: bold;
-    font-size: 1.1rem;
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-  }
-  .scan-mode {
-    background-color: red;
-    color: white;
-    box-shadow: 0 0 8px rgba(255,0,0,0.7);
-  }
-  .scan-mode:hover {
-    background-color: darkred;
-    box-shadow: 0 0 12px rgba(255,0,0,0.9);
-  }
-  .stop-mode {
-    background-color: white;
-    color: black;
-    border: 1px solid black;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>VIN Scanner with Validation</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+      margin: 0;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #container {
+      position: relative;
+      max-width: 480px;
+      width: 100%;
+      margin-top: 1rem;
+    }
+    video {
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid #000;
+      background: black;
+    }
+    #vinBox {
+      font-weight: bold;
+      font-size: 1.4rem;
+      color: #28a745;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      text-align: center;
+      background: white;
+      border: 1px solid #28a745;
+      padding: 0.75rem;
+      display: none;
+      border-radius: 6px;
+    }
+    #vinBox.invalid {
+      color: #b03a3a;
+      border-color: #b03a3a;
+    }
+    #capturedImage {
+      display: none;
+      margin: 1rem auto;
+      border: 1px solid black;
+      max-width: 100%;
+      background: white;
+    }
+    button#toggleScanBtn {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      font-weight: bold;
+      font-size: 1.1rem;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+    }
+    .scan-mode {
+      background-color: red;
+      color: white;
+      box-shadow: 0 0 8px rgba(255,0,0,0.7);
+    }
+    .scan-mode:hover {
+      background-color: darkred;
+      box-shadow: 0 0 12px rgba(255,0,0,0.9);
+    }
+    .stop-mode {
+      background-color: white;
+      color: black;
+      border: 1px solid black;
+    }
+  </style>
 </head>
 <body>
 
 <h2 style="text-align:center;">VIN Scanner</h2>
-
 <button id="toggleScanBtn" class="scan-mode">Scan</button>
 
 <div id="container">
@@ -104,7 +107,7 @@
     if (!stream) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 320 }, height: { ideal: 240 } },
+          video: { facingMode: "environment", width: 1280, height: 720 },
           audio: false
         });
         video.srcObject = stream;
@@ -117,18 +120,45 @@
     return true;
   }
 
+  // VIN check digit validation per ISO 3779
+  function isValidVin(vin) {
+    if (!vin || vin.length !== 17) return false;
+    const map = {
+      A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,J:1,K:2,L:3,M:4,N:5,P:7,R:9,
+      S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9,
+      '1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'0':0
+    };
+    const weights = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+
+    let sum = 0;
+    for (let i = 0; i < vin.length; i++) {
+      const val = map[vin[i]];
+      if (val === undefined) return false;
+      sum += val * weights[i];
+    }
+
+    const checkDigit = sum % 11 === 10 ? 'X' : (sum % 11).toString();
+    return vin[8] === checkDigit;
+  }
+
+  function pickBestVinCandidate(rawVin) {
+    const cleanVin = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (cleanVin.length !== 17) return null;
+    return isValidVin(cleanVin) ? cleanVin : null;
+  }
+
   function startScanningLoop() {
     const captureCanvas = document.createElement('canvas');
     const ctx = captureCanvas.getContext('2d');
 
     scanInterval = setInterval(async () => {
-      if (!scanning || !video.srcObject) return;
-      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      if (!scanning || !video.srcObject || video.videoWidth === 0) return;
 
       captureCanvas.width = video.videoWidth;
       captureCanvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
 
+      // Simple brightness/contrast adjustment
       const imageData = ctx.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
       const data = imageData.data;
       for (let i = 0; i < data.length; i += 4) {
@@ -147,11 +177,22 @@
           oem: 1,
         });
 
-        const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
+        const text = result.data.text;
+        const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
 
         if (vinMatch) {
-          const vin = vinMatch[0];
-          vinBox.textContent = vin;
+          const rawVin = vinMatch[0];
+          const vin = pickBestVinCandidate(rawVin);
+          const vinWord = result.data.words.find(w => w.text.includes(rawVin));
+          const confidence = vinWord?.confidence ?? result.data.confidence;
+
+          if (vin) {
+            vinBox.classList.remove('invalid');
+            vinBox.innerHTML = `${vin}<br><small>VIN is valid — Confidence: ${confidence.toFixed(1)}%</small>`;
+          } else {
+            vinBox.classList.add('invalid');
+            vinBox.innerHTML = `${rawVin}<br><small>VIN invalid or uncertain — Confidence: ${confidence.toFixed(1)}%</small>`;
+          }
           vinBox.style.display = 'block';
           capturedImageEl.src = captureCanvas.toDataURL("image/png");
           capturedImageEl.style.display = 'block';
@@ -165,7 +206,6 @@
       } catch (e) {
         console.error("OCR error:", e);
       }
-
     }, 1000);
   }
 
@@ -178,6 +218,7 @@
     } else {
       vinBox.textContent = '';
       vinBox.style.display = 'none';
+      vinBox.classList.remove('invalid');
       capturedImageEl.style.display = 'none';
 
       scanning = true;
@@ -190,11 +231,7 @@
   toggleBtn.addEventListener('click', async () => {
     const ready = await startCamera();
     if (!ready) return;
-
-    if (!scanInterval) {
-      startScanningLoop();
-    }
-
+    if (!scanInterval) startScanningLoop();
     toggleScan();
   });
 
