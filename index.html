@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VIN Scanner (Corrected Order)</title>
+  <title>VIN Scanner (Production Ready)</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <style>
     /* Global Reset & Box-Sizing */
     *, *::before, *::after {
       box-sizing: border-box;
-      /* outline: 1px solid rgba(255, 0, 0, 0.3); /* Temporary for debugging */
     }
     body {
       font-family: sans-serif;
@@ -19,7 +18,7 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      padding: 0.5rem; /* Mobile-first padding */
+      padding: 0.5rem;
       position: relative;
       width: 100%;
       overflow-x: hidden;
@@ -34,7 +33,7 @@
     /* Main Content Area */
     #mainContent {
       width: 100%;
-      max-width: 480px; /* Constrain width on all screens */
+      max-width: 480px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -98,12 +97,12 @@
       display: none;
     }
 
-    /* VIN Result Display (GREEN BLOCK) - NOW FIRST AFTER CAMERA */
+    /* VIN Result Display (GREEN BLOCK) */
     #vinBox {
       font-weight: bold;
       font-size: 1.2rem;
       color: #28a745;
-      margin-top: 1.5rem; /* Space below camera */
+      margin-top: 1.5rem;
       white-space: pre-wrap;
       text-align: center;
       background: white;
@@ -132,9 +131,9 @@
         margin-top: 5px;
     }
 
-    /* Scan Button (RED BUTTON) - NOW SECOND AFTER VIN BOX */
+    /* Scan/Stop Button */
     button#toggleScanBtn {
-      margin-top: 1.5rem; /* Space below VIN box */
+      margin-top: 1.5rem;
       width: 80px;
       height: 80px;
       border-radius: 50%;
@@ -154,81 +153,34 @@
     button#toggleScanBtn.scanning {
         background-color: orange;
     }
-
-    /* View Snapshot Button - DEEMPHASIZED */
-    #viewSnapshotBtn {
-        display: none;
-        margin-top: 0.75rem; /* Space below red button */
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-        font-weight: normal;
-        color: #555;
-        background-color: #e0e0e0;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-    }
-    #viewSnapshotBtn:hover {
-        background-color: #d0d0d0;
-        color: #333;
-        border-color: #bbb;
+    button#toggleScanBtn.stop-scan {
+        background-color: #007bff;
     }
 
-
-    /* --- Modal Styles --- */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.7);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .modal-content {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      max-width: 90%;
-      max-height: 90%;
-      overflow-y: auto;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .modal-content img {
+    /* Debugging Elements - Hidden by default for production */
+    #debugCanvas, #debugImg {
+      display: none; /* Set to 'display: block;' for debugging */
+      margin-top: 1rem;
+      border: 2px dashed purple;
       max-width: 100%;
       height: auto;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      object-fit: contain;
+      background: #eee;
+    }
+    #debugOutput {
+      display: none; /* Set to 'display: block;' for debugging */
       margin-top: 1rem;
-    }
-
-    .modal-close {
-      position: absolute;
-      top: 10px;
-      right: 15px;
-      font-size: 2rem;
-      font-weight: bold;
-      color: #333;
-      cursor: pointer;
-      background: none;
-      border: none;
-    }
-    .modal-close:hover {
-      color: #000;
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.8em;
+      white-space: pre-wrap;
+      max-height: 180px;
+      overflow-y: scroll;
     }
 
     /* --- Media Queries for Larger Screens --- */
-
     @media (min-width: 480px) {
       body {
         padding: 1rem;
@@ -237,10 +189,6 @@
         width: 90px;
         height: 90px;
         font-size: 1.2rem;
-      }
-      #viewSnapshotBtn {
-        font-size: 1rem; /* Slightly larger on desktop */
-        padding: 0.7rem 1.5rem; /* Restore desktop padding */
       }
     }
 
@@ -271,157 +219,380 @@
 
   <button id="toggleScanBtn">Start</button>
 
-  <button id="viewSnapshotBtn">View Snapshot</button>
-</div>
+  <canvas id="debugCanvas"></canvas>
+  <img id="debugImg">
+  <pre id="debugOutput"></pre>
 
-<div id="snapshotModal" class="modal-overlay">
-  <div class="modal-content">
-    <button class="modal-close" aria-label="Close modal">&times;</button>
-    <h3>Captured Snapshot</h3>
-    <img id="modalCapturedImage" alt="Captured Frame" />
-    <p>This is the image used for the last VIN scan.</p>
-  </div>
 </div>
-
 
 <script>
   const toggleBtn = document.getElementById('toggleScanBtn');
   const video = document.getElementById('video');
   const vinBox = document.getElementById('vinBox');
-  const modalCapturedImageEl = document.getElementById('modalCapturedImage');
   const placeholder = document.getElementById('videoPlaceholder');
   const vinScanArea = document.getElementById('vinScanArea');
 
-  const viewSnapshotBtn = document.getElementById('viewSnapshotBtn');
-  const snapshotModal = document.getElementById('snapshotModal');
-  const modalCloseBtn = snapshotModal.querySelector('.modal-close');
+  const debugOutput = document.getElementById('debugOutput');
+  // NOTE: debugCanvas and debugImg are left here but their usage is commented out in performAutoScan()
+  // const debugCanvas = document.getElementById('debugCanvas');
+  // const debugCtx = debugCanvas.getContext('2d');
+  // const debugImg = document.getElementById('debugImg');
 
   let stream = null;
   let cameraOn = false;
   let isScanning = false;
+  let autoScanIntervalId = null;
+  const SCAN_INTERVAL_MS = 1800; // Interval for auto-scanning frames
+  const MIN_VIN_CONFIDENCE = 0.7; // Minimum confidence to accept a VIN (0.0 - 1.0)
 
+  // Regex to validate VIN structure (17 alphanumeric, excluding I, O, Q)
+  const vinRegex = /^[A-HJ-NPR-Z0-9]{17}$/;
+
+  let worker = null; // Tesseract worker instance
+  let workerInitializing = false; // Flag to prevent multiple worker initialization attempts
+
+  /**
+   * Initializes the Tesseract.js worker.
+   * This function should only be called once.
+   * It handles creating the worker, loading language data, and setting parameters.
+   * @returns {Promise<Tesseract.Worker|null>} The initialized Tesseract worker, or null if initialization failed.
+   */
+  async function initializeTesseractWorker() {
+      if (worker || workerInitializing) {
+          logDebug(`Tesseract worker already ${worker ? 'initialized' : 'initializing'}. Returning existing worker.`);
+          return worker;
+      }
+
+      workerInitializing = true;
+      logDebug('Attempting to create Tesseract worker...');
+      vinBox.innerHTML = '<p style="color: blue;">Loading scanner engine...</p>'; // User feedback
+
+      try {
+          // --- Tesseract.js Configuration ---
+          // IMPORTANT: If you consistently get 'TypeError: Cannot read properties of null (reading 'SetVariable')'
+          // and network tab shows failed downloads for .wasm or .traineddata.gz files,
+          // it means your environment is blocking CDN access.
+          // In that case, you MUST self-host these files and set corePath/langPath here.
+          //
+          // 1. Download:
+          //    - https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract-core.wasm
+          //    - https://cdn.jsdelivr.net/npm/tesseract.js@4/lang-data/eng.traineddata.gz
+          // 2. Place them in your web server's accessible directories, e.g.:
+          //    - /path/to/your/app/tesseract-files/dist/tesseract-core.wasm
+          //    - /path/to/your/app/tesseract-files/lang-data/eng.traineddata.gz
+          // 3. Uncomment and adjust the paths below:
+          // const workerConfig = {
+          //     corePath: './tesseract-files/dist/tesseract-core.wasm', // Path to WASM file
+          //     langPath: './tesseract-files/lang-data',             // Path to directory containing language files
+          //     logger: m => logTesseractProgress(m)
+          // };
+          // For CDN (default):
+          const workerConfig = {
+              logger: m => logTesseractProgress(m)
+          };
+
+          worker = await Tesseract.createWorker('eng', 1, workerConfig);
+          logDebug('Tesseract worker created successfully. Now setting parameters.');
+
+          // Critical check: Ensure worker is not null BEFORE setting parameters
+          if (!worker) {
+              throw new Error("Tesseract worker object is null after createWorker. Possible loading failure.");
+          }
+
+          logDebug('Setting Tesseract parameters...');
+          await worker.setParameters({
+              tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789', // Only allow VIN characters
+              psm: 8 // PSM 8: Assume a single word (VIN) for better accuracy
+                     // Experiment with 6 (single block) or 7 (single line) if 8 isn't reliable.
+          });
+          logDebug('Tesseract parameters set successfully.');
+          vinBox.innerHTML = '<p style="color: green;">Scanner engine ready! Align VIN.</p>';
+          return worker;
+
+      } catch (err) {
+          logDebug(`ERROR: Tesseract worker failed to initialize completely: ${err.message}. Please check browser console and Network tab.`);
+          console.error("Tesseract initialization error:", err);
+          worker = null; // Ensure worker is null if creation failed
+          vinBox.innerHTML = '<p style="color: red;">Scanner failed to load! Check console & network.</p>';
+          alert("Failed to load scanner. Please check your internet connection and browser's Developer Tools (Network tab) for errors, then refresh the page.");
+          return null; // Indicate failure
+      } finally {
+          workerInitializing = false; // Reset flag
+      }
+  }
+
+  /**
+   * Starts the camera stream and initializes Tesseract.
+   * @returns {Promise<boolean>} True if camera started successfully, false otherwise.
+   */
   async function startCamera() {
     if (!stream) {
       try {
+        logDebug('Requesting camera access...');
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
+            facingMode: "environment", // Use rear camera on mobile
+            width: { ideal: 1280 }, // Request higher resolution for better OCR
             height: { ideal: 720 }
           },
-          audio: false
+          audio: false // No audio needed
         });
+
         video.srcObject = stream;
         video.style.display = 'block';
         placeholder.style.display = 'none';
         vinScanArea.style.display = 'block';
         cameraOn = true;
-        toggleBtn.textContent = "Scan";
-        vinBox.innerHTML = '<p>Align VIN with the yellow box</p>';
-        viewSnapshotBtn.style.display = 'none';
-        modalCapturedImageEl.src = '';
+        vinBox.innerHTML = '<p>Camera active. Loading scanner engine...</p>';
+        toggleBtn.textContent = "Stop Scan"; // Button becomes 'Stop Scan' when camera is on
+        toggleBtn.classList.remove('scanning');
+        toggleBtn.classList.add('stop-scan');
+        logDebug('Camera started successfully.');
+
+        // Now that camera is active, initialize Tesseract if not already.
+        // A slight delay ensures the video stream is fully ready.
+        setTimeout(async () => {
+             logDebug('Attempting Tesseract initialization after camera start (500ms delay)...');
+             const initializedWorker = await initializeTesseractWorker(); // Await initialization
+             if (initializedWorker) { // Only proceed if worker is successfully initialized
+                 startAutoScan(); // Start auto-scanning
+             } else {
+                 vinBox.innerHTML = '<p style="color: red;">Scanner not ready. Failed to initialize. Check console/network!</p>';
+                 toggleBtn.textContent = "Start"; // Allow re-attempt
+                 toggleBtn.classList.remove('scanning', 'stop-scan');
+                 logDebug('Tesseract worker initialization failed, not starting auto-scan.');
+             }
+        }, 500); // Increased delay to 500ms for stability
+
       } catch (err) {
-        alert("Camera permission denied: " + err.message + "\nPlease grant camera access to use the scanner.");
+        logDebug(`Camera Access Error: ${err.name || 'Unknown'}: ${err.message}`);
         console.error("Camera access error:", err);
+
+        // Provide specific user feedback based on common errors
+        if (err.name === 'NotAllowedError') {
+            alert("Camera permission was denied. Please allow camera access in your browser and OS settings, then refresh the page.");
+        } else if (err.name === 'NotFoundError') {
+            alert("No camera found on this device.");
+        } else if (err.name === 'NotReadableError') {
+            alert("Camera is already in use by another application or device error. Try closing other apps that might be using the camera.");
+        } else if (err.name === 'OverconstrainedError') {
+             alert(`Camera constraints not met: ${err.message}. Your device might not support the requested video resolution/facing mode.`);
+        }
+        else {
+            alert("Could not start camera: " + err.message + ". Please check your browser's console for more details.");
+        }
+
+        stopCamera(); // Clean up if camera fails to start
         return false;
       }
     }
     return true;
   }
 
-  async function scanFrame() {
-    if (isScanning) return;
-    isScanning = true;
-    toggleBtn.classList.add('scanning');
-    toggleBtn.textContent = "Scanning...";
+  /**
+   * Stops the camera stream and resets UI.
+   */
+  function stopCamera() {
+    if (stream) {
+      logDebug('Stopping camera stream...');
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+    video.srcObject = null;
+    video.style.display = 'none';
+    placeholder.style.display = 'flex';
+    vinScanArea.style.display = 'none';
+    cameraOn = false;
+    vinBox.innerHTML = '<p>Point camera at VIN and press Start</p>';
+    toggleBtn.textContent = "Start";
+    toggleBtn.classList.remove('scanning', 'stop-scan');
+    stopAutoScan(); // Ensure auto-scan is also stopped
+    logDebug('Camera stopped.');
+  }
 
-    vinBox.innerHTML = '<p>Scanning...</p>';
-    viewSnapshotBtn.style.display = 'none';
+  /**
+   * Starts the automatic VIN scanning process.
+   * The `performAutoScan` function will be called repeatedly.
+   */
+  function startAutoScan() {
+    // Only start if not already running AND Tesseract worker is initialized
+    if (autoScanIntervalId === null && worker) {
+        autoScanIntervalId = setInterval(performAutoScan, SCAN_INTERVAL_MS);
+        toggleBtn.textContent = "Scanning...";
+        toggleBtn.classList.add('scanning');
+        toggleBtn.classList.remove('stop-scan');
+        vinBox.innerHTML = '<p>Scanning... Align VIN with the yellow box</p>';
+        logDebug("Auto-scan started.");
+    } else if (!worker) {
+        logDebug("Cannot start auto-scan: Tesseract worker not initialized.");
+        vinBox.innerHTML = '<p style="color: red;">Scanner not ready. Initialize camera first.</p>';
+    } else {
+        logDebug("Auto-scan is already running.");
+    }
+  }
+
+  /**
+   * Stops the automatic VIN scanning process.
+   */
+  function stopAutoScan() {
+    if (autoScanIntervalId !== null) {
+        clearInterval(autoScanIntervalId);
+        autoScanIntervalId = null;
+        logDebug("Auto-scan stopped.");
+        toggleBtn.classList.remove('scanning');
+        if (cameraOn) {
+            toggleBtn.textContent = "Rescan"; // If camera is still on, allow re-scanning
+            toggleBtn.classList.add('stop-scan');
+        } else {
+            toggleBtn.textContent = "Start"; // If camera is off, revert to initial state
+            toggleBtn.classList.remove('stop-scan');
+        }
+    }
+  }
+
+  /**
+   * Captures a frame from the video, crops it to the VIN scan area,
+   * and sends it to Tesseract for OCR.
+   */
+  async function performAutoScan() {
+    // Prevent scanning if camera is off, already scanning, or worker is not ready
+    if (!cameraOn || isScanning || !worker) {
+      logDebug(`Skipping scan (cameraOn: ${cameraOn}, isScanning: ${isScanning}, worker: ${!!worker ? 'ready' : 'not ready'}).`);
+      return;
+    }
+
+    isScanning = true;
+    // vinBox message handled by startAutoScan and success/fail states later
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    const videoRect = video.getBoundingClientRect();
-    const videoIntrinsicWidth = video.videoWidth;
+    const videoRect = video.getBoundingClientRect(); // Position/size of video element on page
+    const videoIntrinsicWidth = video.videoWidth;   // Actual resolution of video stream
     const videoIntrinsicHeight = video.videoHeight;
 
-    const scanAreaRect = vinScanArea.getBoundingClientRect();
+    if (videoIntrinsicWidth === 0 || videoIntrinsicHeight === 0) {
+        logDebug("Video not loaded or has zero dimensions, skipping scan frame.");
+        isScanning = false;
+        return;
+    }
 
+    const scanAreaRect = vinScanArea.getBoundingClientRect(); // Position/size of yellow ROI on page
+
+    // Calculate scaling factors to map CSS pixels to intrinsic video pixels
     const scaleX = videoIntrinsicWidth / videoRect.width;
     const scaleY = videoIntrinsicHeight / videoRect.height;
 
+    // Calculate crop coordinates in intrinsic video pixels
     const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
     const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
     const cropWidth = scanAreaRect.width * scaleX;
     const cropHeight = scanAreaRect.height * scaleY;
 
+    // Set canvas dimensions to the cropped area
     canvas.width = cropWidth;
     canvas.height = cropHeight;
 
+    // Draw the cropped video frame onto the canvas
     ctx.drawImage(
       video,
-      cropX, cropY, cropWidth, cropHeight,
-      0, 0, cropWidth, cropHeight
+      cropX, cropY, cropWidth, cropHeight, // Source rectangle on video
+      0, 0, cropWidth, cropHeight          // Destination rectangle on canvas
     );
 
-    modalCapturedImageEl.src = canvas.toDataURL("image/png");
+    // --- DEBUGGING VISUALS (UNCOMMENT TO USE IF NEEDED) ---
+    // If you need to see the captured frame, set #debugCanvas and #debugImg to 'display: block;' in CSS
+    // debugCanvas.width = canvas.width;
+    // debugCanvas.height = canvas.height;
+    // debugCtx.drawImage(canvas, 0, 0);
+    // debugImg.src = canvas.toDataURL("image/png");
+    // --- END DEBUGGING VISUALS ---
 
     try {
-      const result = await Tesseract.recognize(canvas, 'eng', {
-        tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-        psm: 7
-      });
+      // Perform OCR on the cropped canvas image
+      const result = await worker.recognize(canvas);
 
-      const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-      if (vinMatch) {
-        const vin = vinMatch[0];
-        const confidence = result.data.confidence ? result.data.confidence.toFixed(1) : 'N/A';
-        vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
-        viewSnapshotBtn.style.display = 'block';
+      // Clean and normalize the recognized text
+      const recognizedText = result.data.text ? result.data.text.replace(/\s+/g, '').toUpperCase() : '';
+      const confidence = result.data.confidence || 0; // Confidence score (0-100)
+
+      logDebug(`Recognized: "${recognizedText}", Conf: ${confidence.toFixed(2)}%`);
+
+      // Check if the recognized text is a valid VIN and meets minimum confidence
+      if (vinRegex.test(recognizedText) && (confidence / 100) >= MIN_VIN_CONFIDENCE) {
+        const vin = recognizedText;
+        vinBox.innerHTML = `<p>VIN Detected: ${vin}</p><small>Confidence: ${confidence.toFixed(1)}%</small>`;
+        stopAutoScan(); // Stop scanning once a valid VIN is found
+        toggleBtn.textContent = "Rescan";
+        toggleBtn.classList.remove('scanning');
+        toggleBtn.classList.add('stop-scan');
+        logDebug(`*** VIN FOUND! Stopping auto-scan. VIN: ${vin} ***`);
       } else {
-        vinBox.innerHTML = `<p>No VIN found.</p><small>Try aligning the VIN better.</small>`;
-        viewSnapshotBtn.style.display = 'block';
+        // Continue scanning, update UI with last scan info
+        vinBox.innerHTML = `<p>Scanning... Align VIN with the yellow box</p><small>Last scan: "${recognizedText}" (Conf: ${confidence.toFixed(1)}%)</small>`;
       }
     } catch (e) {
-      console.error("OCR error:", e);
-      vinBox.innerHTML = `<p style="color: red;">OCR Error: ${e.message || 'Check console.'}</p>`;
-      viewSnapshotBtn.style.display = 'block';
+      console.error("OCR error during auto-scan:", e);
+      vinBox.innerHTML = `<p style="color: red;">Error during scan: ${e.message || 'Check console.'}</p>`;
+      logDebug(`OCR Error during auto-scan: ${e.message}`);
     } finally {
-      isScanning = false;
-      toggleBtn.classList.remove('scanning');
-      toggleBtn.textContent = "Scan";
+      isScanning = false; // Allow next scan attempt
+      debugOutput.scrollTop = debugOutput.scrollHeight; // Keep debug log scrolled to bottom
     }
   }
 
+  // --- Event Listeners ---
   toggleBtn.addEventListener('click', async () => {
     if (!cameraOn) {
-      const ready = await startCamera();
-      if (!ready) return;
+      // If camera is off, try to start it. startCamera() will handle Tesseract init and auto-scan.
+      await startCamera();
     } else {
-      await scanFrame();
+      // If camera is already on, toggle the auto-scanning process.
+      if (autoScanIntervalId !== null) {
+          stopAutoScan();
+      } else {
+          startAutoScan();
+      }
     }
   });
 
+  // Clean up camera stream and Tesseract worker when page is closed/reloaded
   window.addEventListener('beforeunload', () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
+    stopCamera();
+    if (worker) {
+        logDebug("Terminating Tesseract worker on page unload.");
+        worker.terminate();
+        worker = null;
     }
   });
 
-  // --- Modal Logic ---
-  viewSnapshotBtn.addEventListener('click', () => {
-    snapshotModal.style.display = 'flex';
-  });
+  // --- Debugging and Logging Helper Functions ---
+  function logDebug(message) {
+      if (debugOutput) { // Check if the debug element exists
+          debugOutput.textContent += `${new Date().toLocaleTimeString()}: ${message}\n`;
+          debugOutput.scrollTop = debugOutput.scrollHeight;
+      }
+      console.log(message); // Also log to console
+  }
 
-  modalCloseBtn.addEventListener('click', () => {
-    snapshotModal.style.display = 'none';
-  });
+  function logTesseractProgress(m) {
+      let progress = m.progress ? (m.progress * 100).toFixed(1) + '%' : '';
+      let statusMessage = `[Tesseract Init] ${m.status}: ${progress} ${m.jobId ? `(Job ID: ${m.jobId})` : ''}`;
+      logDebug(statusMessage);
 
-  snapshotModal.addEventListener('click', (event) => {
-    if (event.target === snapshotModal) {
-      snapshotModal.style.display = 'none';
-    }
-  });
+      // Update UI with more specific loading progress
+      if (m.status === 'loading tesseract core') {
+          vinBox.innerHTML = `<p style="color: blue;">Loading core engine... ${progress}</p>`;
+      } else if (m.status === 'initializing tesseract') {
+          vinBox.innerHTML = `<p style="color: blue;">Initializing engine... ${progress}</p>`;
+      } else if (m.status === 'loading language traineddata') {
+          vinBox.innerHTML = `<p style="color: blue;">Loading language data... ${progress}</p>`;
+      } else if (m.status === 'initialized') {
+          // This message is overridden by "Scanner engine ready!" in initializeTesseractWorker's success path
+          // but can be useful for debugging if init fails after this status.
+          vinBox.innerHTML = '<p style="color: green;">Scanner initialized.</p>';
+      }
+  }
 </script>
 
 </body>
