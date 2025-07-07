@@ -1,121 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>VIN Scanner with Deskew</title>
-<script async src="https://docs.opencv.org/4.x/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
-<style>
-  body {
-    font-family: sans-serif;
-    padding: 1rem;
-    margin: 0;
-    background: #f5f5f5;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  #container {
-    max-width: 480px;
-    width: 100%;
-    margin-top: 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  video {
-    display: none;
-    width: 100%;
-    height: auto;
-    border: 1px solid #000;
-    background: black;
-    border-radius: 8px;
-  }
-  #vinBox {
-    font-weight: bold;
-    font-size: 1.4rem;
-    color: #28a745;
-    margin-top: 1rem;
-    white-space: pre-wrap;
-    text-align: center;
-    background: white;
-    border: 1px solid #28a745;
-    padding: 0.75rem;
-    display: none;
-    border-radius: 6px;
-    min-height: 3em;
-    width: 100%;
-  }
-  #capturedImage, #deskewedImage {
-    display: none;
-    margin: 1rem auto 1rem;
-    border: 2px solid #28a745;
-    max-width: 100%;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(40,167,69,0.5);
-  }
-  button#toggleScanBtn {
-    margin-top: 1rem;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    font-weight: bold;
-    font-size: 1.2rem;
-    cursor: pointer;
-    user-select: none;
-    border: none;
-    transition: all 0.3s ease;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  button.red {
-    background-color: red;
-    color: white;
-    box-shadow: 0 0 8px rgba(255,0,0,0.7);
-  }
-  button.red:hover {
-    background-color: darkred;
-    box-shadow: 0 0 12px rgba(255,0,0,0.9);
-  }
-  button.gray {
-    background-color: #ccc;
-    color: #333;
-    box-shadow: none;
-  }
-  button.gray:hover {
-    background-color: #bbb;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>VIN Scanner (Simple)</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+      margin: 0;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #container {
+      max-width: 480px;
+      width: 100%;
+      margin-top: 1rem;
+    }
+    video {
+      display: none;
+      width: 100%;
+      height: auto;
+      border: 1px solid #000;
+      border-radius: 8px;
+    }
+    #vinBox {
+      font-weight: bold;
+      font-size: 1.4rem;
+      color: #28a745;
+      margin-top: 1rem;
+      white-space: pre-wrap;
+      text-align: center;
+      background: white;
+      border: 1px solid #28a745;
+      padding: 0.75rem;
+      display: none;
+      border-radius: 6px;
+    }
+    #capturedImage {
+      display: none;
+      margin-top: 1rem;
+      border: 2px solid #28a745;
+      border-radius: 6px;
+      max-width: 100%;
+    }
+    button#toggleScanBtn {
+      margin-top: 1rem;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      font-weight: bold;
+      font-size: 1.2rem;
+      cursor: pointer;
+      user-select: none;
+      border: none;
+      transition: all 0.3s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: red;
+      color: white;
+      box-shadow: 0 0 8px rgba(255,0,0,0.7);
+    }
+  </style>
 </head>
 <body>
 
-<h2 style="text-align:center;">VIN Scanner with Deskew</h2>
+<h2>VIN Scanner</h2>
 
 <div id="container">
   <video id="video" autoplay playsinline></video>
-  <button id="toggleScanBtn" class="gray" disabled>Loading...</button>
+  <button id="toggleScanBtn">Start</button>
 </div>
 
 <div id="vinBox"></div>
-<img id="capturedImage" alt="Captured Image (Original)" />
-<img id="deskewedImage" alt="Deskewed Image" />
+<img id="capturedImage" alt="Captured Frame" />
 
 <script>
-  let cvReady = false;
-
-  function onOpenCvReady() {
-    cvReady = true;
-    toggleBtn.disabled = false;
-    toggleBtn.textContent = "Start Camera";
-    toggleBtn.classList.remove('gray');
-  }
-
   const toggleBtn = document.getElementById('toggleScanBtn');
   const video = document.getElementById('video');
   const vinBox = document.getElementById('vinBox');
   const capturedImageEl = document.getElementById('capturedImage');
-  const deskewedImageEl = document.getElementById('deskewedImage');
 
   let stream = null;
   let cameraOn = false;
@@ -131,148 +98,43 @@
         video.style.display = 'block';
         cameraOn = true;
         toggleBtn.textContent = "Scan";
-        toggleBtn.classList.add('red');
-        toggleBtn.classList.remove('gray');
-        vinBox.style.display = 'none';
-        capturedImageEl.style.display = 'none';
-        deskewedImageEl.style.display = 'none';
       } catch (err) {
-        alert("Camera permission denied or error: " + err.message);
+        alert("Camera permission denied: " + err.message);
         return false;
       }
     }
     return true;
   }
 
-  function deskewImage(srcMat) {
-    // Convert to grayscale
-    let gray = new cv.Mat();
-    cv.cvtColor(srcMat, gray, cv.COLOR_RGBA2GRAY, 0);
-
-    // Threshold to binary
-    let thresh = new cv.Mat();
-    cv.threshold(gray, thresh, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU);
-
-    // Invert colors if text is white on black
-    let whitePixels = cv.countNonZero(thresh);
-    if (whitePixels < (thresh.rows * thresh.cols) / 2) {
-      cv.bitwise_not(thresh, thresh);
-    }
-
-    // Detect edges
-    let edges = new cv.Mat();
-    cv.Canny(thresh, edges, 50, 150);
-
-    // Find lines with Hough transform
-    let lines = new cv.Mat();
-    cv.HoughLines(edges, lines, 1, Math.PI / 180, 100);
-
-    // Calculate average angle
-    let angle = 0;
-    let count = 0;
-    for (let i = 0; i < lines.rows; ++i) {
-      let rho = lines.data32F[i*2];
-      let theta = lines.data32F[i*2+1];
-      // Only consider near-horizontal lines
-      if (theta > (Math.PI/4) && theta < (3*Math.PI/4)) {
-        angle += theta;
-        count++;
-      }
-    }
-    if (count === 0) {
-      angle = 0; // No lines found
-    } else {
-      angle = angle / count;
-      angle = (angle * 180 / Math.PI) - 90; // Convert radian to degrees and normalize to -90..90
-    }
-
-    // Rotate to deskew
-    let center = new cv.Point(srcMat.cols / 2, srcMat.rows / 2);
-    let rotMat = cv.getRotationMatrix2D(center, angle, 1);
-    let dst = new cv.Mat();
-    let dsize = new cv.Size(srcMat.cols, srcMat.rows);
-    cv.warpAffine(srcMat, dst, rotMat, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar(255,255,255,255));
-
-    // Cleanup
-    gray.delete(); thresh.delete(); edges.delete(); lines.delete(); rotMat.delete();
-
-    return dst;
-  }
-
   async function scanFrame() {
-    if (!cvReady) {
-      alert("OpenCV.js is not ready yet.");
-      return;
-    }
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const captureCanvas = document.createElement('canvas');
-    captureCanvas.width = video.videoWidth;
-    captureCanvas.height = video.videoHeight;
-    const ctx = captureCanvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-
-    capturedImageEl.src = captureCanvas.toDataURL("image/png");
+    capturedImageEl.src = canvas.toDataURL("image/png");
     capturedImageEl.style.display = 'block';
 
-    // Create OpenCV Mat from canvas
-    let src = cv.imread(captureCanvas);
-
-    // Deskew image
-    let deskewed = deskewImage(src);
-    cv.imshow('deskewedCanvas', deskewed);
-
-    // Convert deskewed Mat back to canvas for OCR
-    let deskewedCanvas = document.createElement('canvas');
-    deskewedCanvas.width = deskewed.cols;
-    deskewedCanvas.height = deskewed.rows;
-    cv.imshow(deskewedCanvas, deskewed);
-
-    deskewedImageEl.src = deskewedCanvas.toDataURL("image/png");
-    deskewedImageEl.style.display = 'block';
-
-    // Enhance contrast on deskewed canvas (optional)
-    let deskewedCtx = deskewedCanvas.getContext('2d');
-    let imageData = deskewedCtx.getImageData(0, 0, deskewedCanvas.width, deskewedCanvas.height);
-    let data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      let r = data[i], g = data[i+1], b = data[i+2];
-      let v = 0.299*r + 0.587*g + 0.114*b;
-      v = (v - 128) * 1.4 + 128;
-      v = Math.min(255, Math.max(0, v));
-      data[i] = data[i+1] = data[i+2] = v;
-    }
-    deskewedCtx.putImageData(imageData, 0, 0);
-
-    // Run OCR on deskewed canvas
     try {
-      const result = await Tesseract.recognize(deskewedCanvas, 'eng', {
+      const result = await Tesseract.recognize(canvas, 'eng', {
         tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-        psm: 7,
-        oem: 1,
+        psm: 7
       });
 
-      const text = result.data.text;
-      const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-
+      const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
       if (vinMatch) {
         const vin = vinMatch[0];
-        const vinWord = result.data.words.find(w => w.text.includes(vin));
-        const confidence = vinWord?.confidence ?? result.data.confidence;
-
-        vinBox.innerHTML = `${vin}<br><small>Confidence: ${confidence.toFixed(1)}%</small>`;
+        const confidence = result.data.confidence.toFixed(1);
+        vinBox.innerHTML = `${vin}<br><small>Confidence: ${confidence}%</small>`;
         vinBox.style.display = 'block';
       } else {
-        vinBox.style.display = 'none';
-        alert('No valid 17-character VIN found in image.');
+        vinBox.textContent = "No VIN found.";
+        vinBox.style.display = 'block';
       }
     } catch (e) {
       console.error("OCR error:", e);
-      alert('Error scanning image.');
     }
-
-    // Cleanup mats
-    src.delete();
-    deskewed.delete();
   }
 
   toggleBtn.addEventListener('click', async () => {
@@ -288,9 +150,6 @@
     if (stream) stream.getTracks().forEach(track => track.stop());
   });
 </script>
-
-<!-- Hidden canvas for showing deskewed img (used internally) -->
-<canvas id="deskewedCanvas" style="display:none;"></canvas>
 
 </body>
 </html>
