@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>VIN Scanner with Validation</title>
+  <title>VIN Scanner with Manual Scan</title>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <style>
     body {
@@ -19,13 +19,17 @@
       max-width: 480px;
       width: 100%;
       margin-top: 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     video {
-      display: block;
+      display: none;
       width: 100%;
       height: auto;
       border: 1px solid #000;
       background: black;
+      border-radius: 8px;
     }
     #vinBox {
       font-weight: bold;
@@ -39,10 +43,8 @@
       padding: 0.75rem;
       display: none;
       border-radius: 6px;
-    }
-    #vinBox.invalid {
-      color: #b03a3a;
-      border-color: #b03a3a;
+      min-height: 3em;
+      width: 100%;
     }
     #capturedImage {
       display: none;
@@ -50,44 +52,49 @@
       border: 1px solid black;
       max-width: 100%;
       background: white;
+      border-radius: 8px;
     }
     button#toggleScanBtn {
+      margin-top: 1rem;
       width: 80px;
       height: 80px;
       border-radius: 50%;
       font-weight: bold;
-      font-size: 1.1rem;
+      font-size: 1.2rem;
       cursor: pointer;
       user-select: none;
+      border: none;
       transition: all 0.3s ease;
       display: flex;
-      align-items: center;
       justify-content: center;
-      border: none;
+      align-items: center;
     }
-    .scan-mode {
+    button.red {
       background-color: red;
       color: white;
       box-shadow: 0 0 8px rgba(255,0,0,0.7);
     }
-    .scan-mode:hover {
+    button.red:hover {
       background-color: darkred;
       box-shadow: 0 0 12px rgba(255,0,0,0.9);
     }
-    .stop-mode {
-      background-color: white;
-      color: black;
-      border: 1px solid black;
+    button.gray {
+      background-color: #ccc;
+      color: #333;
+      box-shadow: none;
+    }
+    button.gray:hover {
+      background-color: #bbb;
     }
   </style>
 </head>
 <body>
 
 <h2 style="text-align:center;">VIN Scanner</h2>
-<button id="toggleScanBtn" class="scan-mode">Scan</button>
 
 <div id="container">
-  <video id="video" autoplay playsinline style="display:none;"></video>
+  <video id="video" autoplay playsinline></video>
+  <button id="toggleScanBtn" class="gray">Start Camera</button>
 </div>
 
 <div id="vinBox"></div>
@@ -100,8 +107,7 @@
   const capturedImageEl = document.getElementById('capturedImage');
 
   let stream = null;
-  let scanning = false;
-  let scanInterval = null;
+  let cameraOn = false;
 
   async function startCamera() {
     if (!stream) {
@@ -112,6 +118,17 @@
         });
         video.srcObject = stream;
         video.style.display = 'block';
+        cameraOn = true;
+        toggleBtn.textContent = "Scan";
+        toggleBtn.classList.remove('gray');
+        toggleBtn.classList.add('red');
+        vinBox.style.display = 'none';
+        capturedImageEl.style.display = 'none';
+
+        video.onloadedmetadata = () => {
+          console.log(`Actual camera resolution: ${video.videoWidth}x${video.videoHeight}`);
+          alert(`Camera resolution: ${video.videoWidth}x${video.videoHeight}`);
+        };
       } catch (err) {
         alert("Camera permission denied or error: " + err.message);
         return false;
@@ -120,119 +137,62 @@
     return true;
   }
 
-  // VIN check digit validation per ISO 3779
-  function isValidVin(vin) {
-    if (!vin || vin.length !== 17) return false;
-    const map = {
-      A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,J:1,K:2,L:3,M:4,N:5,P:7,R:9,
-      S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9,
-      '1':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'0':0
-    };
-    const weights = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
-
-    let sum = 0;
-    for (let i = 0; i < vin.length; i++) {
-      const val = map[vin[i]];
-      if (val === undefined) return false;
-      sum += val * weights[i];
-    }
-
-    const checkDigit = sum % 11 === 10 ? 'X' : (sum % 11).toString();
-    return vin[8] === checkDigit;
-  }
-
-  function pickBestVinCandidate(rawVin) {
-    const cleanVin = rawVin.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (cleanVin.length !== 17) return null;
-    return isValidVin(cleanVin) ? cleanVin : null;
-  }
-
-  function startScanningLoop() {
+  async function scanFrame() {
     const captureCanvas = document.createElement('canvas');
     const ctx = captureCanvas.getContext('2d');
+    captureCanvas.width = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
 
-    scanInterval = setInterval(async () => {
-      if (!scanning || !video.srcObject || video.videoWidth === 0) return;
+    // Enhance contrast
+    const imageData = ctx.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i], g = data[i+1], b = data[i+2];
+      let v = 0.299*r + 0.587*g + 0.114*b;
+      v = (v - 128) * 1.4 + 128;
+      v = Math.min(255, Math.max(0, v));
+      data[i] = data[i+1] = data[i+2] = v;
+    }
+    ctx.putImageData(imageData, 0, 0);
 
-      captureCanvas.width = video.videoWidth;
-      captureCanvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+    try {
+      const result = await Tesseract.recognize(captureCanvas, 'eng', {
+        tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
+        psm: 7,
+        oem: 1,
+      });
 
-      // Simple brightness/contrast adjustment
-      const imageData = ctx.getImageData(0, 0, captureCanvas.width, captureCanvas.height);
-      const data = imageData.data;
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i], g = data[i+1], b = data[i+2];
-        let v = 0.299*r + 0.587*g + 0.114*b;
-        v = (v - 128) * 1.4 + 128;
-        v = Math.min(255, Math.max(0, v));
-        data[i] = data[i+1] = data[i+2] = v;
+      const text = result.data.text;
+      const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
+
+      if (vinMatch) {
+        const vin = vinMatch[0];
+        const vinWord = result.data.words.find(w => w.text.includes(vin));
+        const confidence = vinWord?.confidence ?? result.data.confidence;
+
+        vinBox.innerHTML = `${vin}<br><small>Confidence: ${confidence.toFixed(1)}%</small>`;
+        vinBox.style.display = 'block';
+        capturedImageEl.src = captureCanvas.toDataURL("image/png");
+        capturedImageEl.style.display = 'block';
+      } else {
+        vinBox.style.display = 'none';
+        capturedImageEl.style.display = 'none';
+        alert('No valid 17-character VIN found in image.');
       }
-      ctx.putImageData(imageData, 0, 0);
-
-      try {
-        const result = await Tesseract.recognize(captureCanvas, 'eng', {
-          tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-          psm: 7,
-          oem: 1,
-        });
-
-        const text = result.data.text;
-        const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-
-        if (vinMatch) {
-          const rawVin = vinMatch[0];
-          const vin = pickBestVinCandidate(rawVin);
-          const vinWord = result.data.words.find(w => w.text.includes(rawVin));
-          const confidence = vinWord?.confidence ?? result.data.confidence;
-
-          if (vin) {
-            vinBox.classList.remove('invalid');
-            vinBox.innerHTML = `${vin}<br><small>VIN is valid — Confidence: ${confidence.toFixed(1)}%</small>`;
-          } else {
-            vinBox.classList.add('invalid');
-            vinBox.innerHTML = `${rawVin}<br><small>VIN invalid or uncertain — Confidence: ${confidence.toFixed(1)}%</small>`;
-          }
-          vinBox.style.display = 'block';
-          capturedImageEl.src = captureCanvas.toDataURL("image/png");
-          capturedImageEl.style.display = 'block';
-
-          scanning = false;
-          toggleBtn.textContent = "Scan";
-          toggleBtn.classList.remove("stop-mode");
-          toggleBtn.classList.add("scan-mode");
-        }
-
-      } catch (e) {
-        console.error("OCR error:", e);
-      }
-    }, 1000);
-  }
-
-  function toggleScan() {
-    if (scanning) {
-      scanning = false;
-      toggleBtn.textContent = "Scan";
-      toggleBtn.classList.remove("stop-mode");
-      toggleBtn.classList.add("scan-mode");
-    } else {
-      vinBox.textContent = '';
-      vinBox.style.display = 'none';
-      vinBox.classList.remove('invalid');
-      capturedImageEl.style.display = 'none';
-
-      scanning = true;
-      toggleBtn.textContent = "Stop";
-      toggleBtn.classList.remove("scan-mode");
-      toggleBtn.classList.add("stop-mode");
+    } catch (e) {
+      console.error("OCR error:", e);
+      alert('Error scanning image.');
     }
   }
 
   toggleBtn.addEventListener('click', async () => {
-    const ready = await startCamera();
-    if (!ready) return;
-    if (!scanInterval) startScanningLoop();
-    toggleScan();
+    if (!cameraOn) {
+      const ready = await startCamera();
+      if (!ready) return;
+    } else {
+      await scanFrame();
+    }
   });
 
   window.addEventListener('beforeunload', () => {
