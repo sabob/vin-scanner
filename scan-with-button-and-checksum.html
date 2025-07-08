@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>VIN Scanner (Tesseract.js v5)</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        /* Global Reset & Box-Sizing */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            /* outline: 1px solid rgba(255, 0, 0, 0.3); /* Temporary for debugging */
+        }
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 0.5rem; /* Mobile-first padding */
+            position: relative;
+            width: 100%;
+            overflow-x: hidden;
+        }
+
+        h2 {
+            margin-top: 1rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Main Content Area */
+        #mainContent {
+            width: 100%;
+            max-width: 480px; /* Constrain width on all screens */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        /* Camera Container with ROI Overlay */
+        #container {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            position: relative;
+            margin-top: 1rem;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #e9e9e9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 3px dashed #aaa;
+        }
+
+        #videoPlaceholder {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #555;
+            font-size: 1.1rem;
+            z-index: 1;
+        }
+
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 12px;
+            display: none;
+            z-index: 0;
+        }
+
+        /* VIN Scan Area Overlay */
+        #vinScanArea {
+            position: absolute;
+            top: 35%;
+            left: 5%;
+            width: 90%;
+            height: 25%;
+            border: 3px solid #ffc107; /* Default yellow border */
+            border-radius: 4px;
+            z-index: 2;
+            pointer-events: none;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            display: none;
+        }
+
+        /* VIN Result Display (GREEN BLOCK) - NOW FIRST AFTER CAMERA */
+        #vinBox {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: #28a745;
+            margin-top: 1.5rem; /* Space below camera */
+            white-space: pre-wrap;
+            text-align: center;
+            background: white;
+            border: 1px solid #28a745;
+            padding: 0.75rem;
+            border-radius: 6px;
+            min-height: 50px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow-wrap: break-word;
+            min-width: 0;
+        }
+
+        #vinBox p {
+            margin: 0;
+            padding: 0;
+            max-width: 100%;
+        }
+
+        #vinBox small {
+            font-size: 0.7em;
+            color: #555;
+            margin-top: 5px;
+        }
+
+        /* Scan Button (RED BUTTON) - NOW SECOND AFTER VIN BOX */
+        button#toggleScanBtn {
+            margin-top: 1.5rem; /* Space below VIN box */
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            border: none;
+            background-color: red;
+            color: white;
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
+            transition: background-color 0.3s ease;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        button#toggleScanBtn.scanning {
+            background-color: orange;
+        }
+
+        /* View Snapshot Button - DEEMPHASIZED */
+        #viewSnapshotBtn {
+            display: none;
+            margin-top: 0.75rem; /* Space below red button */
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            font-weight: normal;
+            color: #555;
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+        }
+        #viewSnapshotBtn:hover {
+            background-color: #d0d0d0;
+            color: #333;
+            border-color: #bbb;
+        }
+
+
+        /* --- Modal Styles --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .modal-content img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 1rem;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            background: none;
+            border: none;
+        }
+        .modal-close:hover {
+            color: #000;
+        }
+
+        /* --- Media Queries for Larger Screens --- */
+
+        @media (min-width: 480px) {
+            body {
+                padding: 1rem;
+            }
+            button#toggleScanBtn {
+                width: 90px;
+                height: 90px;
+                font-size: 1.2rem;
+            }
+            #viewSnapshotBtn {
+                font-size: 1rem; /* Slightly larger on desktop */
+                padding: 0.7rem 1.5rem; /* Restore desktop padding */
+            }
+        }
+
+        @media (min-width: 600px) {
+            #vinBox {
+                font-size: 1.4rem;
+            }
+            #vinBox small {
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<h2>VIN Scanner</h2>
+
+<div id="mainContent">
+    <div id="container">
+        <div id="videoPlaceholder">Camera will appear here</div>
+        <video id="video" autoplay playsinline></video>
+        <div id="vinScanArea"></div>
+    </div>
+
+    <div id="vinBox">
+        <p>Point camera at VIN and press Start</p>
+    </div>
+
+    <button id="toggleScanBtn">Start</button>
+
+    <button id="viewSnapshotBtn">View Snapshot</button>
+</div>
+
+<div id="snapshotModal" class="modal-overlay">
+    <div class="modal-content">
+        <button class="modal-close" aria-label="Close modal">&times;</button>
+        <h3>Captured Snapshot</h3>
+        <img id="modalCapturedImage" alt="Captured Frame" />
+        <p>This is the image used for the last VIN scan.</p>
+    </div>
+</div>
+
+
+<script>
+    const toggleBtn = document.getElementById('toggleScanBtn');
+    const video = document.getElementById('video');
+    const vinBox = document.getElementById('vinBox');
+    const modalCapturedImageEl = document.getElementById('modalCapturedImage');
+    const placeholder = document.getElementById('videoPlaceholder');
+    const vinScanArea = document.getElementById('vinScanArea');
+
+    const viewSnapshotBtn = document.getElementById('viewSnapshotBtn');
+    const snapshotModal = document.getElementById('snapshotModal');
+    const modalCloseBtn = snapshotModal.querySelector('.modal-close');
+
+    let stream = null;
+    let cameraOn = false;
+    let isScanning = false;
+    let worker = null; // Declare worker globally
+
+    // --- VIN Checksum Logic ---
+    const VIN_VALUES = {
+        '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9,
+        'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5, 'F': 6, 'G': 7, 'H': 8, 'J': 1, 'K': 2,
+        'L': 3, 'M': 4, 'N': 5, 'P': 7, 'R': 9, 'S': 2, 'T': 3, 'U': 4, 'V': 5, 'W': 6,
+        'X': 7, 'Y': 8, 'Z': 9
+    };
+
+    const VIN_WEIGHTS = [
+        8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2
+    ]; // Position 9 (index 8) has a weight of 0 as it's the check digit itself
+
+    function calculateVinCheckDigit(vinString) {
+        // This function will now work with the exact `vinString` provided (e.g., mixed case)
+        // It will internally convert characters to uppercase for value lookup.
+
+        // Ensure the input is exactly 17 characters for a valid VIN check
+        if (vinString.length !== 17) {
+            console.warn("VIN string must be 17 characters long for check digit calculation.");
+            return null;
+        }
+
+        let sum = 0;
+        for (let i = 0; i < 17; i++) {
+            // Convert character to uppercase ONLY for lookup in VIN_VALUES
+            const char = vinString[i].toUpperCase();
+            const value = VIN_VALUES[char];
+            const weight = VIN_WEIGHTS[i];
+
+            // If a character is not in VIN_VALUES (e.g., I, O, Q, or other invalid char)
+            if (value === undefined) {
+                console.warn(`Invalid VIN character '${char}' found in VIN at position ${i + 1}.`);
+                return null; // This VIN candidate is not valid according to VIN character set
+            }
+
+            // Skip the check digit itself (position 9, index 8) for sum calculation
+            if (i === 8) {
+                continue;
+            }
+
+            sum += value * weight;
+        }
+
+        const remainder = sum % 11;
+        // The check digit is 'X' if the remainder is 10, otherwise it's the remainder itself
+        if (remainder === 10) {
+            return 'X';
+        } else {
+            return String(remainder);
+        }
+    }
+
+    // --- End VIN Checksum Logic ---
+
+    // Initialize Tesseract.js worker
+    async function initializeTesseractWorker() {
+        if (worker) return; // Worker already initialized
+
+        vinBox.innerHTML = '<p>Loading OCR engine...</p>';
+
+        worker = await Tesseract.createWorker('eng', 3, {
+            logger: m => {
+                // You can use the logger to display progress
+                if (m.status === 'loading' || m.status === 'initializing') {
+                    vinBox.innerHTML = `<p>Loading OCR: ${Math.round(m.progress * 100)}%</p>`;
+                ;
+                } else if (m.status === 'recognizing') {
+                    // Only show scanning progress if an OCR process is actively running
+                    if (isScanning) {
+                        vinBox.innerHTML = `<p>Scanning: ${Math.round(m.progress * 100)}%</p>`;
+                    }
+                }
+                console.log(m);
+            }
+        });
+
+        // Set parameters for the worker if needed.
+        await worker.setParameters({
+            tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789', // Whitelist valid VIN characters
+            psm: 7 // Treat the image as a single text line
+        });
+
+        vinBox.innerHTML = '<p>Point camera at VIN and press Start</p>';
+    }
+
+    async function startCamera() {
+        if (!stream) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "environment", // Prefer the rear camera
+                        width: { ideal: 1280 },    // Request ideal resolution
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
+                video.srcObject = stream;
+                video.style.display = 'block';
+                placeholder.style.display = 'none';
+                vinScanArea.style.display = 'block';
+                cameraOn = true;
+                toggleBtn.textContent = "Scan"; // Initial text for manual scan
+                vinBox.innerHTML = '<p>Align VIN with the yellow box</p>';
+                viewSnapshotBtn.style.display = 'none';
+                modalCapturedImageEl.src = ''; // Clear previous image
+
+                // Pre-load Tesseract.js worker when camera starts
+                await initializeTesseractWorker();
+
+            } catch (err) {
+                alert("Camera permission denied: " + err.message + "\nPlease grant camera access to use the scanner.");
+                console.error("Camera access error:", err);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    async function scanFrame() {
+        if (isScanning || !worker) return; // Prevent multiple scans or scan before worker is ready
+        isScanning = true;
+        toggleBtn.classList.add('scanning'); // Indicate an OCR process is running
+        toggleBtn.textContent = "Scanning...";
+
+        vinBox.innerHTML = '<p>Scanning...</p>';
+        viewSnapshotBtn.style.display = 'none';
+        vinScanArea.style.borderColor = '#ffc107'; // Reset border to yellow before new scan
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Calculate current video and scan area dimensions
+        const videoRect = video.getBoundingClientRect();
+        const scanAreaRect = vinScanArea.getBoundingClientRect();
+
+        const videoIntrinsicWidth = video.videoWidth;
+        const videoIntrinsicHeight = video.videoHeight;
+
+        const scaleX = videoIntrinsicWidth / videoRect.width;
+        const scaleY = videoIntrinsicHeight / videoRect.height;
+
+        // Determine crop coordinates based on overlay position and video aspect ratio
+        const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
+        const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
+        const cropWidth = scanAreaRect.width * scaleX;
+        const cropHeight = scanAreaRect.height * scaleY;
+
+        canvas.width = cropWidth;
+        canvas.height = cropHeight;
+
+        // Draw the cropped video frame onto the canvas
+        ctx.drawImage(
+            video,
+            cropX, cropY, cropWidth, cropHeight,
+            0, 0, cropWidth, cropHeight
+        );
+
+        // Set the original cropped image to the modal for inspection
+        modalCapturedImageEl.src = canvas.toDataURL("image/png");
+
+        try {
+            const result = await worker.recognize(canvas);
+
+            let rawText = result.data.text.trim();
+
+            // Attempt to find a 17-character VIN directly in the raw OCR output.
+            // The regex will match case-insensitively due to the 'i' flag.
+            // It will ONLY match a contiguous sequence of 17 valid VIN characters.
+            // It will NOT automatically remove internal spaces that Tesseract might have inserted.
+            const vinCandidateMatch = rawText.match(/\b([A-HJ-NPR-Z0-9]{17})\b/i);
+
+            if (vinCandidateMatch) {
+                const vinCandidate = vinCandidateMatch[1]; // Get the captured group (the 17 characters)
+
+                // Pass the raw matched candidate to the checksum function.
+                // The checksum function will internally handle casing for lookup.
+                const expectedCheckDigit = calculateVinCheckDigit(vinCandidate);
+                const actualCheckDigit = vinCandidate[8].toUpperCase(); // Get actual 9th char, convert to uppercase for comparison
+
+                if (expectedCheckDigit !== null && expectedCheckDigit === actualCheckDigit) {
+                    // VIN is valid and passes checksum! Display the exact matched VIN.
+                    const vin = vinCandidate; // Display the raw matched VIN
+                    const confidence = result.data.confidence ? result.data.confidence.toFixed(1) : 'N/A';
+                    vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}% (Checksum OK!)</small>`;
+                    vinScanArea.style.borderColor = '#28a745'; // Green for success
+                } else {
+                    // Found a 17-char string, but it failed the checksum or had invalid characters
+                    let checksumMessage = `Expected Check Digit: ${expectedCheckDigit || 'N/A'}, Actual: ${actualCheckDigit}.`;
+                    if (expectedCheckDigit === null) {
+                        checksumMessage = "Invalid VIN characters detected by checksum function (I, O, Q, or other non-VIN characters).";
+                    }
+                    vinBox.innerHTML = `<p>VIN found, but checksum failed.</p><p>VIN: <i>"${vinCandidate}"</i></p><p>Details: ${checksumMessage}</p><small>Check VIN, re-align, or improve lighting.</small>`;
+                    vinScanArea.style.borderColor = '#dc3545'; // Red for failure
+                }
+            } else {
+                // No 17-char VIN candidate found by regex from the raw output
+                vinBox.innerHTML = `<p>No 17-character VIN found.</p><p>Raw OCR Text: <i>"${rawText}"</i></p><small>Ensure VIN is contiguous and align better.</small>`;
+                vinScanArea.style.borderColor = '#ffc107'; // Reset to default yellow
+            }
+        } catch (e) {
+            console.error("OCR error:", e);
+            vinBox.innerHTML = `<p style="color: red;">OCR Error: ${e.message || 'Check console.'}</p>`;
+            vinScanArea.style.borderColor = '#ffc107'; // Reset to default yellow
+        } finally {
+            isScanning = false;
+            toggleBtn.classList.remove('scanning');
+            toggleBtn.textContent = "Scan"; // Reset button text
+            viewSnapshotBtn.style.display = 'block'; // Always allow viewing the snapshot after a scan attempt
+        }
+    }
+
+    toggleBtn.addEventListener('click', async () => {
+        if (!cameraOn) {
+            const ready = await startCamera();
+            if (!ready) return;
+            // Camera is now on. The button text is "Scan".
+            // User must click again to initiate a scan.
+        } else {
+            // If camera is already on, trigger a scan
+            // Ensure worker is ready before scanning
+            if (!worker) {
+                vinBox.innerHTML = '<p>Initializing OCR engine, please wait...</p>';
+                await initializeTesseractWorker();
+            }
+            await scanFrame();
+        }
+    });
+
+    window.addEventListener('beforeunload', () => {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        if (worker) {
+            worker.terminate(); // Terminate worker to free up resources
+        }
+    });
+
+    // --- Modal Logic ---
+    viewSnapshotBtn.addEventListener('click', () => {
+        snapshotModal.style.display = 'flex';
+    });
+
+    modalCloseBtn.addEventListener('click', () => {
+        snapshotModal.style.display = 'none';
+    });
+
+    snapshotModal.addEventListener('click', (event) => {
+        if (event.target === snapshotModal) {
+            snapshotModal.style.display = 'none';
+        }
+    });
+</script>
+
+</body>
+</html>

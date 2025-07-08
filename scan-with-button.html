@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VIN Scanner (Corrected Order)</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+  <title>VIN Scanner (Tesseract.js v5)</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     /* Global Reset & Box-Sizing */
     *, *::before, *::after {
@@ -89,7 +89,7 @@
       top: 35%;
       left: 5%;
       width: 90%;
-      height: 30%;
+      height: 25%;
       border: 3px solid #ffc107;
       border-radius: 4px;
       z-index: 2;
@@ -299,6 +299,41 @@
   let stream = null;
   let cameraOn = false;
   let isScanning = false;
+  let worker = null; // Declare worker globally
+
+  // Initialize Tesseract.js worker
+  async function initializeTesseractWorker() {
+    if (worker) return; // Worker already initialized
+
+    vinBox.innerHTML = '<p>Loading OCR engine...</p>';
+
+    // In v5, createWorker takes language and OEM as arguments directly
+    // and handles loading and initialization internally.
+    // 'eng' for English, and 3 for default OCR engine mode (Tesseract + LSTM)
+    worker = await Tesseract.createWorker('eng', 3, {
+      logger: m => {
+        // You can use the logger to display progress
+        if (m.status === 'loading' || m.status === 'initializing') {
+          vinBox.innerHTML = `<p>Loading OCR: ${Math.round(m.progress * 100)}%</p>`;
+        } else if (m.status === 'recognizing') {
+          vinBox.innerHTML = `<p>Scanning: ${Math.round(m.progress * 100)}%</p>`;
+        }
+        console.log(m);
+      }
+    });
+
+    // Set parameters for the worker if needed.
+    // These parameters will apply to all subsequent recognize calls
+    // unless overridden in the recognize options.
+    await worker.setParameters({
+      tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
+      // psm: 7 is typically good for a single line of text
+      psm: 7
+    });
+
+    vinBox.innerHTML = '<p>Point camera at VIN and press Start</p>';
+  }
+
 
   async function startCamera() {
     if (!stream) {
@@ -320,6 +355,10 @@
         vinBox.innerHTML = '<p>Align VIN with the yellow box</p>';
         viewSnapshotBtn.style.display = 'none';
         modalCapturedImageEl.src = '';
+
+        // Pre-load Tesseract.js worker when camera starts
+        await initializeTesseractWorker();
+
       } catch (err) {
         alert("Camera permission denied: " + err.message + "\nPlease grant camera access to use the scanner.");
         console.error("Camera access error:", err);
@@ -330,7 +369,7 @@
   }
 
   async function scanFrame() {
-    if (isScanning) return;
+    if (isScanning || !worker) return; // Prevent multiple scans or scan before worker is ready
     isScanning = true;
     toggleBtn.classList.add('scanning');
     toggleBtn.textContent = "Scanning...";
@@ -367,10 +406,11 @@
     modalCapturedImageEl.src = canvas.toDataURL("image/png");
 
     try {
-      const result = await Tesseract.recognize(canvas, 'eng', {
-        tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-        psm: 7
-      });
+      // In v5, parameters set with worker.setParameters are persistent.
+      // If you needed different parameters for *this specific scan*,
+      // you could pass them in the third argument here:
+      // const result = await worker.recognize(canvas, { tessedit_char_whitelist: '0123456789' });
+      const result = await worker.recognize(canvas);
 
       const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
       if (vinMatch) {
@@ -398,6 +438,11 @@
       const ready = await startCamera();
       if (!ready) return;
     } else {
+      // Ensure worker is ready before scanning
+      if (!worker) {
+        vinBox.innerHTML = '<p>Initializing OCR engine, please wait...</p>';
+        await initializeTesseractWorker();
+      }
       await scanFrame();
     }
   });
@@ -405,6 +450,9 @@
   window.addEventListener('beforeunload', () => {
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
+    }
+    if (worker) {
+      worker.terminate(); // Terminate worker to free up resources
     }
   });
 
