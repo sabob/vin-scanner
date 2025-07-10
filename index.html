@@ -213,6 +213,23 @@
         margin-bottom: 0;
       }
 
+      /* Debug Output Area */
+      #debugOutput {
+        white-space: pre-wrap; /* Preserve line breaks and spaces */
+        font-family: monospace; /* Monospace font for readability */
+        font-size: 0.7em;
+        color: #666;
+        background: #f0f0f0;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 10px;
+        margin-top: 15px;
+        width: 100%;
+        max-height: 200px; /* Limit height to prevent taking too much screen */
+        overflow-y: auto; /* Enable scrolling for long logs */
+        box-sizing: border-box; /* Include padding/border in width/height */
+      }
+
       /* --- Media Queries for Larger Screens --- */
 
       @media (min-width: 480px) {
@@ -261,6 +278,8 @@
         <img id="displayedCapturedImage" alt="Captured Frame" />
         <p>This is the image used for the last VIN scan.</p>
       </div>
+
+      <pre id="debugOutput"></pre>
     </div>
 
     <script>
@@ -275,17 +294,26 @@
       );
       const placeholder = document.getElementById("videoPlaceholder");
       const vinScanArea = document.getElementById("vinScanArea");
+      const debugOutput = document.getElementById("debugOutput"); // Get reference to new element
 
       let stream = null;
       let cameraOn = false;
       let isScanning = false;
       let worker = null; // Declare worker globally
 
+      // Function to log messages to both console and UI
+      function logDebug(message) {
+        console.log(message);
+        debugOutput.textContent += message + "\n";
+        debugOutput.scrollTop = debugOutput.scrollHeight; // Auto-scroll to bottom
+      }
+
       // Initialize Tesseract.js worker
       async function initializeTesseractWorker() {
         if (worker) return; // Worker already initialized
 
         vinBox.innerHTML = "<p>Loading OCR engine...</p>";
+        logDebug("Initializing Tesseract worker...");
 
         worker = await Tesseract.createWorker("eng", 3, {
           logger: (m) => {
@@ -298,7 +326,8 @@
                 m.progress * 100
               )}%</p`;
             }
-            console.log(m);
+            // We'll primarily rely on our custom logs for debug, but still keep this for general progress
+            // console.log(m);
           },
         });
 
@@ -308,11 +337,14 @@
         });
 
         vinBox.innerHTML = "<p>Point camera at VIN and press Start</p>";
+        logDebug("Tesseract worker initialized.");
       }
 
       async function startCamera() {
         if (!stream) {
           try {
+            debugOutput.textContent = ""; // Clear previous logs
+            logDebug("Attempting to start camera...");
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
                 facingMode: "environment",
@@ -328,6 +360,7 @@
             cameraOn = true;
             toggleBtn.textContent = "Scan";
             vinBox.innerHTML = "<p>Align VIN with the yellow box</p>";
+            logDebug("Camera started successfully.");
 
             // Ensure the image display is hidden when camera starts
             displayedCapturedImageEl.src = ""; // Clear previously displayed image
@@ -336,11 +369,12 @@
             // Pre-load Tesseract.js worker when camera starts
             await initializeTesseractWorker();
           } catch (err) {
-            alert(
+            const errorMessage =
               "Camera permission denied: " +
-                err.message +
-                "\nPlease grant camera access to use the scanner."
-            );
+              err.message +
+              "\nPlease grant camera access to use the scanner.";
+            alert(errorMessage);
+            logDebug("Camera access error: " + err.message);
             console.error("Camera access error:", err);
             return false;
           }
@@ -356,26 +390,130 @@
 
         vinBox.innerHTML = "<p>Scanning...</p>";
         capturedImageDisplayDiv.style.display = "none"; // Hide image during scan to show new one
+        debugOutput.textContent = ""; // Clear previous logs for a fresh scan output
 
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
 
-        const videoRect = video.getBoundingClientRect();
         const videoIntrinsicWidth = video.videoWidth;
         const videoIntrinsicHeight = video.videoHeight;
+        const videoIntrinsicAspect = videoIntrinsicWidth / videoIntrinsicHeight;
+
+        const containerRect = video.parentElement.getBoundingClientRect(); // The #container element
+        const containerWidth = containerRect.width;
+        const containerHeight = containerRect.height;
+        const containerAspect = containerWidth / containerHeight;
+
+        let renderedVideoWidthInIntrinsicPixels;
+        let renderedVideoHeightInIntrinsicPixels;
+        let renderedOffsetXInIntrinsicPixels = 0;
+        let renderedOffsetYInIntrinsicPixels = 0;
+
+        // Calculate the actual visible portion of the intrinsic video frame due to object-fit: cover
+        if (videoIntrinsicAspect > containerAspect) {
+          // Video is wider than container aspect. It fills the height of the container,
+          // and gets cropped horizontally.
+          renderedVideoHeightInIntrinsicPixels = videoIntrinsicHeight;
+          renderedVideoWidthInIntrinsicPixels =
+            videoIntrinsicHeight * containerAspect;
+          renderedOffsetXInIntrinsicPixels =
+            (videoIntrinsicWidth - renderedVideoWidthInIntrinsicPixels) / 2;
+          renderedOffsetYInIntrinsicPixels = 0;
+        } else {
+          // Video is taller than container aspect. It fills the width of the container,
+          // and gets cropped vertically.
+          renderedVideoWidthInIntrinsicPixels = videoIntrinsicWidth;
+          renderedVideoHeightInIntrinsicPixels =
+            videoIntrinsicWidth / containerAspect;
+          renderedOffsetXInIntrinsicPixels = 0;
+          renderedOffsetYInIntrinsicPixels =
+            (videoIntrinsicHeight - renderedVideoHeightInIntrinsicPixels) / 2;
+        }
 
         const scanAreaRect = vinScanArea.getBoundingClientRect();
 
-        const scaleX = videoIntrinsicWidth / videoRect.width;
-        const scaleY = videoIntrinsicHeight / videoRect.height;
+        // Calculate scan area coordinates relative to the *container* in CSS pixels
+        const scanAreaX_css_relative_to_container =
+          scanAreaRect.left - containerRect.left;
+        const scanAreaY_css_relative_to_container =
+          scanAreaRect.top - containerRect.top;
+        const scanAreaWidth_css = scanAreaRect.width;
+        const scanAreaHeight_css = scanAreaRect.height;
 
-        const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
-        const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
-        const cropWidth = scanAreaRect.width * scaleX;
-        const cropHeight = scanAreaRect.height * scaleY;
+        // Calculate the scaling factors from CSS pixels (of the rendered container) to
+        // intrinsic video pixels (of the effectively displayed intrinsic video area)
+        const scaleFactorX_css_to_intrinsic =
+          renderedVideoWidthInIntrinsicPixels / containerWidth;
+        const scaleFactorY_css_to_intrinsic =
+          renderedVideoHeightInIntrinsicPixels / containerHeight;
 
+        // Calculate the final crop coordinates and dimensions in intrinsic video pixels
+        // These are the arguments for ctx.drawImage's source rectangle
+        const cropX = Math.max(
+          0,
+          renderedOffsetXInIntrinsicPixels +
+            scanAreaX_css_relative_to_container * scaleFactorX_css_to_intrinsic
+        );
+        const cropY = Math.max(
+          0,
+          renderedOffsetYInIntrinsicPixels +
+            scanAreaY_css_relative_to_container * scaleFactorY_css_to_intrinsic
+        );
+        const cropWidth = scanAreaWidth_css * scaleFactorX_css_to_intrinsic;
+        const cropHeight = scanAreaHeight_css * scaleFactorY_css_to_intrinsic;
+
+        // Set canvas dimensions to the calculated crop dimensions
         canvas.width = cropWidth;
         canvas.height = cropHeight;
+
+        // --- DEBUG LOGGING ON UI ---
+        logDebug("--- Scan Frame Debug Info ---");
+        logDebug(
+          `Video Intrinsic: ${videoIntrinsicWidth}x${videoIntrinsicHeight}`
+        );
+        logDebug(
+          `Container CSS: ${containerWidth.toFixed(
+            0
+          )}x${containerHeight.toFixed(0)}`
+        );
+        logDebug(
+          `Intrinsic Aspect: ${videoIntrinsicAspect.toFixed(
+            2
+          )}, Container Aspect: ${containerAspect.toFixed(2)}`
+        );
+        logDebug(
+          `Rendered Video In Intrinsic Pixels (Effective Viewport): ${renderedVideoWidthInIntrinsicPixels.toFixed(
+            0
+          )}x${renderedVideoHeightInIntrinsicPixels.toFixed(0)}`
+        );
+        logDebug(
+          `Rendered Offset In Intrinsic Pixels: X=${renderedOffsetXInIntrinsicPixels.toFixed(
+            0
+          )}, Y=${renderedOffsetYInIntrinsicPixels.toFixed(0)}`
+        );
+        logDebug(
+          `Scan Area CSS (rel to container): X=${scanAreaX_css_relative_to_container.toFixed(
+            0
+          )}, Y=${scanAreaY_css_relative_to_container.toFixed(
+            0
+          )}, W=${scanAreaWidth_css.toFixed(0)}, H=${scanAreaHeight_css.toFixed(
+            0
+          )}`
+        );
+        logDebug(
+          `Scale Factors (CSS to Intrinsic): X=${scaleFactorX_css_to_intrinsic.toFixed(
+            2
+          )}, Y=${scaleFactorY_css_to_intrinsic.toFixed(2)}`
+        );
+        logDebug(
+          `Final Canvas Crop (Intrinsic Video Pixels): X=${cropX.toFixed(
+            0
+          )}, Y=${cropY.toFixed(0)}, W=${cropWidth.toFixed(
+            0
+          )}, H=${cropHeight.toFixed(0)}`
+        );
+        logDebug("----------------------------");
+        // --- END DEBUG LOGGING ON UI ---
 
         ctx.drawImage(
           video,
@@ -401,8 +539,14 @@
               ? result.data.confidence.toFixed(1)
               : "N/A";
             vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
+            logDebug(`OCR Result: ${vin}, Confidence: ${confidence}%`);
           } else {
             vinBox.innerHTML = `<p>No valid 17-character VIN found.</p><small>Try aligning the VIN better.</small>`;
+            logDebug(
+              `OCR Result: No VIN found. Text: ${result.data.text
+                .trim()
+                .substring(0, 100)}...`
+            );
           }
 
           // Always display the image after a scan is attempted
@@ -412,6 +556,7 @@
           vinBox.innerHTML = `<p style="color: red;">OCR Error: ${
             e.message || "Check console."
           }</p>`;
+          logDebug(`OCR Error: ${e.message || "Unknown error"}`);
           // Always display the image even if OCR fails
           capturedImageDisplayDiv.style.display = "block";
         } finally {
@@ -429,6 +574,7 @@
           // Ensure worker is ready before scanning
           if (!worker) {
             vinBox.innerHTML = "<p>Initializing OCR engine, please wait...</p>";
+            logDebug("Initializing OCR engine from button click...");
             await initializeTesseractWorker();
           }
           await scanFrame();
@@ -441,6 +587,7 @@
         }
         if (worker) {
           worker.terminate(); // Terminate worker to free up resources
+          logDebug("Tesseract worker terminated.");
         }
       });
 
