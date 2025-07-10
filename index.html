@@ -1,164 +1,169 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VIN Scanner (Tesseract.js v5)</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <style>
-    /* Global Reset & Box-Sizing */
-    *, *::before, *::after {
-      box-sizing: border-box;
-      /* outline: 1px solid rgba(255, 0, 0, 0.3); /* Temporary for debugging */
-    }
-    body {
-      font-family: sans-serif;
-      margin: 0;
-      background: #f5f5f5;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding: 0.5rem; /* Mobile-first padding */
-      position: relative;
-      width: 100%;
-      overflow-x: hidden;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>VIN Scanner (Tesseract.js v5)</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+      /* Global Reset & Box-Sizing */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        /* outline: 1px solid rgba(255, 0, 0, 0.3); /* Temporary for debugging */
+      }
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        background: #f5f5f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 0.5rem; /* Mobile-first padding */
+        position: relative;
+        width: 100%;
+        overflow-x: hidden;
+      }
 
-    h2 {
-      margin-top: 1rem;
-      text-align: center;
-      width: 100%;
-    }
+      h2 {
+        margin-top: 1rem;
+        text-align: center;
+        width: 100%;
+      }
 
-    /* Main Content Area */
-    #mainContent {
-      width: 100%;
-      max-width: 480px; /* Constrain width on all screens */
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      flex-grow: 1;
-      min-width: 0;
-    }
+      /* Main Content Area */
+      #mainContent {
+        width: 100%;
+        max-width: 480px; /* Constrain width on all screens */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        flex-grow: 1;
+        min-width: 0;
+      }
 
-    /* Camera Container with ROI Overlay */
-    #container {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      position: relative;
-      margin-top: 1rem;
-      border-radius: 12px;
-      overflow: hidden;
-      background: #e9e9e9;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border: 3px dashed #aaa;
-    }
+      /* Camera Container with ROI Overlay */
+      #container {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        position: relative;
+        margin-top: 1rem;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #e9e9e9;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border: 3px dashed #aaa;
+      }
 
-    #videoPlaceholder {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      color: #555;
-      font-size: 1.1rem;
-      z-index: 1;
-    }
+      #videoPlaceholder {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: #555;
+        font-size: 1.1rem;
+        z-index: 1;
+      }
 
-    video {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-radius: 12px;
-      display: none;
-      z-index: 0;
-    }
+      video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 12px;
+        display: none;
+        z-index: 0;
+      }
 
-    /* VIN Scan Area Overlay */
-    #vinScanArea {
-      position: absolute;
-      top: 35%;
-      left: 25%;
-      width: 50%;
-      height: 10%;
-      border: 3px solid #ffc107;
-      border-radius: 4px;
-      z-index: 2;
-      pointer-events: none;
-      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
-      display: none;
-    }
+      /* VIN Scan Area Overlay - FURTHER ADJUSTED */
+      #vinScanArea {
+        position: absolute;
+        top: 43%; /* Slightly higher to accommodate increased height and center better */
+        left: 25%; /* Adjusted for new narrower width */
+        width: 50%; /* Made significantly narrower */
+        height: 15%; /* Slightly increased height */
+        border: 3px solid #ffc107;
+        border-radius: 4px;
+        z-index: 2;
+        pointer-events: none;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        display: none;
+      }
 
-    /* VIN Result Display (GREEN BLOCK) - NOW FIRST AFTER CAMERA */
-    #vinBox {
-      font-weight: bold;
-      font-size: 1.2rem;
-      color: #28a745;
-      margin-top: 1.5rem; /* Space below camera */
-      white-space: pre-wrap;
-      text-align: center;
-      background: white;
-      border: 1px solid #28a745;
-      padding: 0.75rem;
-      border-radius: 6px;
-      min-height: 50px;
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      overflow-wrap: break-word;
-      min-width: 0;
-    }
+      /* VIN Result Display (GREEN BLOCK) */
+      #vinBox {
+        font-weight: bold;
+        font-size: 1.2rem;
+        color: #28a745;
+        margin-top: 1.5rem;
+        white-space: pre-wrap;
+        text-align: center;
+        background: white;
+        border: 1px solid #28a745;
+        padding: 0.75rem;
+        border-radius: 6px;
+        min-height: 50px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        overflow-wrap: break-word;
+        min-width: 0;
+      }
 
-    #vinBox p {
+      #vinBox p {
         margin: 0;
         padding: 0;
         max-width: 100%;
-    }
+      }
 
-    #vinBox small {
+      #vinBox small {
         font-size: 0.7em;
         color: #555;
         margin-top: 5px;
-    }
+      }
 
-    /* Scan Button (RED BUTTON) - NOW SECOND AFTER VIN BOX */
-    button#toggleScanBtn {
-      margin-top: 1.5rem; /* Space below VIN box */
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      font-weight: bold;
-      font-size: 1.1rem;
-      cursor: pointer;
-      border: none;
-      background-color: red;
-      color: white;
-      box-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
-      transition: background-color 0.3s ease;
-      display: block;
-      margin-left: auto;
-      margin-right: auto;
-    }
+      /* Scan Button (RED BUTTON) */
+      button#toggleScanBtn {
+        margin-top: 1.5rem;
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        font-weight: bold;
+        font-size: 1.1rem;
+        cursor: pointer;
+        border: none;
+        background-color: red;
+        color: white;
+        box-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
+        transition: background-color 0.3s ease;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+      }
 
-    button#toggleScanBtn.scanning {
+      button#toggleScanBtn.scanning {
         background-color: orange;
-    }
+      }
 
-    /* View Snapshot Button - DEEMPHASIZED */
-    #viewSnapshotBtn {
+      /* View Snapshot Button - DEEMPHASIZED */
+      #viewSnapshotBtn {
         display: none;
-        margin-top: 0.75rem; /* Space below red button */
+        margin-top: 0.75rem;
         padding: 0.5rem 1rem;
         font-size: 0.9rem;
         font-weight: normal;
@@ -168,309 +173,278 @@
         border-radius: 4px;
         cursor: pointer;
         transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-    }
-    #viewSnapshotBtn:hover {
+      }
+      #viewSnapshotBtn:hover {
         background-color: #d0d0d0;
         color: #333;
         border-color: #bbb;
-    }
+      }
 
-
-    /* --- Modal Styles --- */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(0, 0, 0, 0.7);
-      z-index: 1000;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .modal-content {
-      background: white;
-      padding: 1.5rem;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      max-width: 90%;
-      max-height: 90%;
-      overflow-y: auto;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-
-    .modal-content img {
-      max-width: 100%;
-      height: auto;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      margin-top: 1rem;
-    }
-
-    .modal-close {
-      position: absolute;
-      top: 10px;
-      right: 15px;
-      font-size: 2rem;
-      font-weight: bold;
-      color: #333;
-      cursor: pointer;
-      background: none;
-      border: none;
-    }
-    .modal-close:hover {
-      color: #000;
-    }
-
-    /* --- Media Queries for Larger Screens --- */
-
-    @media (min-width: 480px) {
-      body {
+      /* Styles for the captured image display */
+      #capturedImageDisplay {
+        display: none;
+        margin-top: 1.5rem;
+        width: 100%;
+        max-width: 480px;
+        text-align: center;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
         padding: 1rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       }
-      button#toggleScanBtn {
-        width: 90px;
-        height: 90px;
-        font-size: 1.2rem;
+
+      #capturedImageDisplay img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        margin-top: 0.5rem;
       }
-      #viewSnapshotBtn {
-        font-size: 1rem; /* Slightly larger on desktop */
-        padding: 0.7rem 1.5rem; /* Restore desktop padding */
+
+      #capturedImageDisplay h3 {
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+        color: #333;
       }
-    }
 
-    @media (min-width: 600px) {
-      #vinBox {
-        font-size: 1.4rem;
+      #capturedImageDisplay p {
+        font-size: 0.85rem;
+        color: #666;
+        margin-bottom: 0;
       }
-      #vinBox small {
-        font-size: 0.8em;
-      }
-    }
-  </style>
-</head>
-<body>
 
-<h2>VIN Scanner</h2>
+      /* --- Media Queries for Larger Screens --- */
 
-<div id="mainContent">
-  <div id="container">
-    <div id="videoPlaceholder">Camera will appear here</div>
-    <video id="video" autoplay playsinline></video>
-    <div id="vinScanArea"></div>
-  </div>
-
-  <div id="vinBox">
-    <p>Point camera at VIN and press Start</p>
-  </div>
-
-  <button id="toggleScanBtn">Start</button>
-
-  <button id="viewSnapshotBtn">View Snapshot</button>
-</div>
-
-<div id="snapshotModal" class="modal-overlay">
-  <div class="modal-content">
-    <button class="modal-close" aria-label="Close modal">&times;</button>
-    <h3>Captured Snapshot</h3>
-    <img id="modalCapturedImage" alt="Captured Frame" />
-    <p>This is the image used for the last VIN scan.</p>
-  </div>
-</div>
-
-
-<script>
-  const toggleBtn = document.getElementById('toggleScanBtn');
-  const video = document.getElementById('video');
-  const vinBox = document.getElementById('vinBox');
-  const modalCapturedImageEl = document.getElementById('modalCapturedImage');
-  const placeholder = document.getElementById('videoPlaceholder');
-  const vinScanArea = document.getElementById('vinScanArea');
-
-  const viewSnapshotBtn = document.getElementById('viewSnapshotBtn');
-  const snapshotModal = document.getElementById('snapshotModal');
-  const modalCloseBtn = snapshotModal.querySelector('.modal-close');
-
-  let stream = null;
-  let cameraOn = false;
-  let isScanning = false;
-  let worker = null; // Declare worker globally
-
-  // Initialize Tesseract.js worker
-  async function initializeTesseractWorker() {
-    if (worker) return; // Worker already initialized
-
-    vinBox.innerHTML = '<p>Loading OCR engine...</p>';
-
-    // In v5, createWorker takes language and OEM as arguments directly
-    // and handles loading and initialization internally.
-    // 'eng' for English, and 3 for default OCR engine mode (Tesseract + LSTM)
-    worker = await Tesseract.createWorker('eng', 3, {
-      logger: m => {
-        // You can use the logger to display progress
-        if (m.status === 'loading' || m.status === 'initializing') {
-          vinBox.innerHTML = `<p>Loading OCR: ${Math.round(m.progress * 100)}%</p>`;
-        } else if (m.status === 'recognizing') {
-          vinBox.innerHTML = `<p>Scanning: ${Math.round(m.progress * 100)}%</p>`;
+      @media (min-width: 480px) {
+        body {
+          padding: 1rem;
         }
-        console.log(m);
+        button#toggleScanBtn {
+          width: 90px;
+          height: 90px;
+          font-size: 1.2rem;
+        }
+        #viewSnapshotBtn {
+          font-size: 1rem;
+          padding: 0.7rem 1.5rem;
+        }
       }
-    });
 
-    // Set parameters for the worker if needed.
-    // These parameters will apply to all subsequent recognize calls
-    // unless overridden in the recognize options.
-    await worker.setParameters({
-      tessedit_char_whitelist: 'ABCDEFGHJKLMNPRSTUVWXYZ0123456789',
-      // psm: 7 is typically good for a single line of text
-      psm: 7
-    });
+      @media (min-width: 600px) {
+        #vinBox {
+          font-size: 1.4rem;
+        }
+        #vinBox small {
+          font-size: 0.8em;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h2>VIN Scanner</h2>
 
-    vinBox.innerHTML = '<p>Point camera at VIN and press Start</p>';
-  }
+    <div id="mainContent">
+      <div id="container">
+        <div id="videoPlaceholder">Camera will appear here</div>
+        <video id="video" autoplay playsinline></video>
+        <div id="vinScanArea"></div>
+      </div>
 
+      <div id="vinBox">
+        <p>Point camera at VIN and press Start</p>
+      </div>
 
-  async function startCamera() {
-    if (!stream) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+      <button id="toggleScanBtn">Start</button>
+
+      <div id="capturedImageDisplay">
+        <h3>Captured Snapshot</h3>
+        <img id="displayedCapturedImage" alt="Captured Frame" />
+        <p>This is the image used for the last VIN scan.</p>
+      </div>
+    </div>
+
+    <script>
+      const toggleBtn = document.getElementById("toggleScanBtn");
+      const video = document.getElementById("video");
+      const vinBox = document.getElementById("vinBox");
+      const displayedCapturedImageEl = document.getElementById(
+        "displayedCapturedImage"
+      );
+      const capturedImageDisplayDiv = document.getElementById(
+        "capturedImageDisplay"
+      );
+      const placeholder = document.getElementById("videoPlaceholder");
+      const vinScanArea = document.getElementById("vinScanArea");
+
+      let stream = null;
+      let cameraOn = false;
+      let isScanning = false;
+      let worker = null; // Declare worker globally
+
+      // Initialize Tesseract.js worker
+      async function initializeTesseractWorker() {
+        if (worker) return; // Worker already initialized
+
+        vinBox.innerHTML = "<p>Loading OCR engine...</p>";
+
+        worker = await Tesseract.createWorker("eng", 3, {
+          logger: (m) => {
+            if (m.status === "loading" || m.status === "initializing") {
+              vinBox.innerHTML = `<p>Loading OCR: ${Math.round(
+                m.progress * 100
+              )}%</p>`;
+            } else if (m.status === "recognizing") {
+              vinBox.innerHTML = `<p>Scanning: ${Math.round(
+                m.progress * 100
+              )}%</p`;
+            }
+            console.log(m);
           },
-          audio: false
         });
-        video.srcObject = stream;
-        video.style.display = 'block';
-        placeholder.style.display = 'none';
-        vinScanArea.style.display = 'block';
-        cameraOn = true;
-        toggleBtn.textContent = "Scan";
-        vinBox.innerHTML = '<p>Align VIN with the yellow box</p>';
-        viewSnapshotBtn.style.display = 'none';
-        modalCapturedImageEl.src = '';
 
-        // Pre-load Tesseract.js worker when camera starts
-        await initializeTesseractWorker();
+        await worker.setParameters({
+          tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
+          psm: 7,
+        });
 
-      } catch (err) {
-        alert("Camera permission denied: " + err.message + "\nPlease grant camera access to use the scanner.");
-        console.error("Camera access error:", err);
-        return false;
+        vinBox.innerHTML = "<p>Point camera at VIN and press Start</p>";
       }
-    }
-    return true;
-  }
 
-  async function scanFrame() {
-    if (isScanning || !worker) return; // Prevent multiple scans or scan before worker is ready
-    isScanning = true;
-    toggleBtn.classList.add('scanning');
-    toggleBtn.textContent = "Scanning...";
+      async function startCamera() {
+        if (!stream) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                facingMode: "environment",
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+              },
+              audio: false,
+            });
+            video.srcObject = stream;
+            video.style.display = "block";
+            placeholder.style.display = "none";
+            vinScanArea.style.display = "block";
+            cameraOn = true;
+            toggleBtn.textContent = "Scan";
+            vinBox.innerHTML = "<p>Align VIN with the yellow box</p>";
 
-    vinBox.innerHTML = '<p>Scanning...</p>';
-    viewSnapshotBtn.style.display = 'none';
+            // Ensure the image display is hidden when camera starts
+            displayedCapturedImageEl.src = ""; // Clear previously displayed image
+            capturedImageDisplayDiv.style.display = "none";
 
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    const videoRect = video.getBoundingClientRect();
-    const videoIntrinsicWidth = video.videoWidth;
-    const videoIntrinsicHeight = video.videoHeight;
-
-    const scanAreaRect = vinScanArea.getBoundingClientRect();
-
-    const scaleX = videoIntrinsicWidth / videoRect.width;
-    const scaleY = videoIntrinsicHeight / videoRect.height;
-
-    const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
-    const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
-    const cropWidth = scanAreaRect.width * scaleX;
-    const cropHeight = scanAreaRect.height * scaleY;
-
-    canvas.width = cropWidth;
-    canvas.height = cropHeight;
-
-    ctx.drawImage(
-      video,
-      cropX, cropY, cropWidth, cropHeight,
-      0, 0, cropWidth, cropHeight
-    );
-
-    modalCapturedImageEl.src = canvas.toDataURL("image/png");
-
-    try {
-      // In v5, parameters set with worker.setParameters are persistent.
-      // If you needed different parameters for *this specific scan*,
-      // you could pass them in the third argument here:
-      // const result = await worker.recognize(canvas, { tessedit_char_whitelist: '0123456789' });
-      const result = await worker.recognize(canvas);
-
-      const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-      if (vinMatch) {
-        const vin = vinMatch[0];
-        const confidence = result.data.confidence ? result.data.confidence.toFixed(1) : 'N/A';
-        vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
-        viewSnapshotBtn.style.display = 'block';
-      } else {
-        vinBox.innerHTML = `<p>No VIN found.</p><small>Try aligning the VIN better.</small>`;
-        viewSnapshotBtn.style.display = 'block';
+            // Pre-load Tesseract.js worker when camera starts
+            await initializeTesseractWorker();
+          } catch (err) {
+            alert(
+              "Camera permission denied: " +
+                err.message +
+                "\nPlease grant camera access to use the scanner."
+            );
+            console.error("Camera access error:", err);
+            return false;
+          }
+        }
+        return true;
       }
-    } catch (e) {
-      console.error("OCR error:", e);
-      vinBox.innerHTML = `<p style="color: red;">OCR Error: ${e.message || 'Check console.'}</p>`;
-      viewSnapshotBtn.style.display = 'block';
-    } finally {
-      isScanning = false;
-      toggleBtn.classList.remove('scanning');
-      toggleBtn.textContent = "Scan";
-    }
-  }
 
-  toggleBtn.addEventListener('click', async () => {
-    if (!cameraOn) {
-      const ready = await startCamera();
-      if (!ready) return;
-    } else {
-      // Ensure worker is ready before scanning
-      if (!worker) {
-        vinBox.innerHTML = '<p>Initializing OCR engine, please wait...</p>';
-        await initializeTesseractWorker();
+      async function scanFrame() {
+        if (isScanning || !worker) return;
+        isScanning = true;
+        toggleBtn.classList.add("scanning");
+        toggleBtn.textContent = "Scanning...";
+
+        vinBox.innerHTML = "<p>Scanning...</p>";
+        capturedImageDisplayDiv.style.display = "none"; // Hide image during scan to show new one
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+
+        const videoRect = video.getBoundingClientRect();
+        const videoIntrinsicWidth = video.videoWidth;
+        const videoIntrinsicHeight = video.videoHeight;
+
+        const scanAreaRect = vinScanArea.getBoundingClientRect();
+
+        const scaleX = videoIntrinsicWidth / videoRect.width;
+        const scaleY = videoIntrinsicHeight / videoRect.height;
+
+        const cropX = (scanAreaRect.left - videoRect.left) * scaleX;
+        const cropY = (scanAreaRect.top - videoRect.top) * scaleY;
+        const cropWidth = scanAreaRect.width * scaleX;
+        const cropHeight = scanAreaRect.height * scaleY;
+
+        canvas.width = cropWidth;
+        canvas.height = cropHeight;
+
+        ctx.drawImage(
+          video,
+          cropX,
+          cropY,
+          cropWidth,
+          cropHeight,
+          0,
+          0,
+          cropWidth,
+          cropHeight
+        );
+
+        displayedCapturedImageEl.src = canvas.toDataURL("image/png"); // Set image source
+
+        try {
+          const result = await worker.recognize(canvas);
+
+          const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
+          if (vinMatch) {
+            const vin = vinMatch[0];
+            const confidence = result.data.confidence
+              ? result.data.confidence.toFixed(1)
+              : "N/A";
+            vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
+          } else {
+            vinBox.innerHTML = `<p>No valid 17-character VIN found.</p><small>Try aligning the VIN better.</small>`;
+          }
+
+          // Always display the image after a scan is attempted
+          capturedImageDisplayDiv.style.display = "block";
+        } catch (e) {
+          console.error("OCR error:", e);
+          vinBox.innerHTML = `<p style="color: red;">OCR Error: ${
+            e.message || "Check console."
+          }</p>`;
+          // Always display the image even if OCR fails
+          capturedImageDisplayDiv.style.display = "block";
+        } finally {
+          isScanning = false;
+          toggleBtn.classList.remove("scanning");
+          toggleBtn.textContent = "Scan";
+        }
       }
-      await scanFrame();
-    }
-  });
 
-  window.addEventListener('beforeunload', () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-    if (worker) {
-      worker.terminate(); // Terminate worker to free up resources
-    }
-  });
+      toggleBtn.addEventListener("click", async () => {
+        if (!cameraOn) {
+          const ready = await startCamera();
+          if (!ready) return;
+        } else {
+          // Ensure worker is ready before scanning
+          if (!worker) {
+            vinBox.innerHTML = "<p>Initializing OCR engine, please wait...</p>";
+            await initializeTesseractWorker();
+          }
+          await scanFrame();
+        }
+      });
 
-  // --- Modal Logic ---
-  viewSnapshotBtn.addEventListener('click', () => {
-    snapshotModal.style.display = 'flex';
-  });
+      window.addEventListener("beforeunload", () => {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+        if (worker) {
+          worker.terminate(); // Terminate worker to free up resources
+        }
+      });
 
-  modalCloseBtn.addEventListener('click', () => {
-    snapshotModal.style.display = 'none';
-  });
-
-  snapshotModal.addEventListener('click', (event) => {
-    if (event.target === snapshotModal) {
-      snapshotModal.style.display = 'none';
-    }
-  });
-</script>
-
-</body>
+      // No event listener needed for viewSnapshotBtn as the image displays directly
+    </script>
+  </body>
 </html>
