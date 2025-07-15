@@ -9,6 +9,9 @@
     <title>VIN Scanner (Tesseract.js v5)</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
+      #vinBox a {
+        color: #28a745;
+      }
       /* Global Reset & Box-Sizing */
       *,
       *::before,
@@ -538,8 +541,9 @@
             const confidence = result.data.confidence
               ? result.data.confidence.toFixed(1)
               : "N/A";
-            vinBox.innerHTML = `<p>VIN: ${vin}</p><small>Confidence: ${confidence}%</small>`;
-            logDebug(`OCR Result: ${vin}, Confidence: ${confidence}%`);
+           vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a></p><small>Confidence: ${confidence}%</small>`;
+    logDebug(`OCR Result: ${vin}, Confidence: ${confidence}%`);
+
           } else {
             vinBox.innerHTML = `<p>No valid 17-character VIN found.</p><small>Try aligning the VIN better.</small>`;
             logDebug(
