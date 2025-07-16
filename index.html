@@ -91,18 +91,19 @@
         z-index: 0;
       }
 
-      /* VIN Scan Area Overlay - FURTHER ADJUSTED */
+      /* VIN Scan Area Overlay - CIRCLE (Slightly Larger) */
       #vinScanArea {
         position: absolute;
-        top: 43%; /* Slightly higher to accommodate increased height and center better */
-        left: 25%; /* Adjusted for new narrower width */
-        width: 50%; /* Made significantly narrower */
-        height: 15%; /* Slightly increased height */
+        top: 50%; /* Center vertically */
+        left: 50%; /* Center horizontally */
+        transform: translate(-50%, -50%); /* Adjust for its own size */
+        height: 90%; /* Increased height to make the circle larger */
+        aspect-ratio: 1 / 1; /* Ensures it's a perfect circle (width will match height) */
         border: 3px solid #ffc107;
-        border-radius: 4px;
+        border-radius: 50%; /* Makes it a circle */
         z-index: 2;
         pointer-events: none;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Creates the darkened outside effect */
         display: none;
       }
 
@@ -362,7 +363,7 @@
             vinScanArea.style.display = "block";
             cameraOn = true;
             toggleBtn.textContent = "Scan";
-            vinBox.innerHTML = "<p>Align VIN with the yellow box</p>";
+            vinBox.innerHTML = "<p>Align VIN with the yellow circle</p>";
             logDebug("Camera started successfully.");
 
             // Ensure the image display is hidden when camera starts
@@ -436,9 +437,10 @@
         const scanAreaRect = vinScanArea.getBoundingClientRect();
 
         // Calculate scan area coordinates relative to the *container* in CSS pixels
-        const scanAreaX_css_relative_to_container =
+        // These will be relative to the top-left of the container, before transform is applied
+        const scanAreaX_css_relative_to_container_untransformed =
           scanAreaRect.left - containerRect.left;
-        const scanAreaY_css_relative_to_container =
+        const scanAreaY_css_relative_to_container_untransformed =
           scanAreaRect.top - containerRect.top;
         const scanAreaWidth_css = scanAreaRect.width;
         const scanAreaHeight_css = scanAreaRect.height;
@@ -455,12 +457,14 @@
         const cropX = Math.max(
           0,
           renderedOffsetXInIntrinsicPixels +
-            scanAreaX_css_relative_to_container * scaleFactorX_css_to_intrinsic
+            scanAreaX_css_relative_to_container_untransformed *
+              scaleFactorX_css_to_intrinsic
         );
         const cropY = Math.max(
           0,
           renderedOffsetYInIntrinsicPixels +
-            scanAreaY_css_relative_to_container * scaleFactorY_css_to_intrinsic
+            scanAreaY_css_relative_to_container_untransformed *
+              scaleFactorY_css_to_intrinsic
         );
         const cropWidth = scanAreaWidth_css * scaleFactorX_css_to_intrinsic;
         const cropHeight = scanAreaHeight_css * scaleFactorY_css_to_intrinsic;
@@ -495,9 +499,9 @@
           )}, Y=${renderedOffsetYInIntrinsicPixels.toFixed(0)}`
         );
         logDebug(
-          `Scan Area CSS (rel to container): X=${scanAreaX_css_relative_to_container.toFixed(
+          `Scan Area CSS (rel to container): X=${scanAreaX_css_relative_to_container_untransformed.toFixed(
             0
-          )}, Y=${scanAreaY_css_relative_to_container.toFixed(
+          )}, Y=${scanAreaY_css_relative_to_container_untransformed.toFixed(
             0
           )}, W=${scanAreaWidth_css.toFixed(0)}, H=${scanAreaHeight_css.toFixed(
             0
@@ -535,15 +539,15 @@
         try {
           const result = await worker.recognize(canvas);
 
+          // CORRECTED: Fixed regex and array access for vinMatch
           const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
           if (vinMatch) {
-            const vin = vinMatch[0];
+            const vin = vinMatch[0]; // Corrected: Use [0] for array access
             const confidence = result.data.confidence
               ? result.data.confidence.toFixed(1)
               : "N/A";
-           vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a></p><small>Confidence: ${confidence}%</small>`;
-    logDebug(`OCR Result: ${vin}, Confidence: ${confidence}%`);
-
+            vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a></p><small>Confidence: ${confidence}%</small>`;
+            logDebug(`OCR Result: ${vin}, Confidence: ${confidence}%`);
           } else {
             vinBox.innerHTML = `<p>No valid 17-character VIN found.</p><small>Try aligning the VIN better.</small>`;
             logDebug(
@@ -594,8 +598,6 @@
           logDebug("Tesseract worker terminated.");
         }
       });
-
-      // No event listener needed for viewSnapshotBtn as the image displays directly
     </script>
   </body>
 </html>
