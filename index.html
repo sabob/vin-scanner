@@ -40,7 +40,7 @@
         /* Main Content Area */
         #mainContent {
             width: 100%;
-            max-width: 600px; /* Increased max-width for bigger video area */
+            max-width: 480px; /* MODIFIED: Reduced max-width for smaller video area */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -104,13 +104,13 @@
             z-index: 0;
         }
 
-        /* VIN Scan Area Overlay - CIRCLE (Slightly Larger) */
+        /* VIN Scan Area Overlay - CIRCLE (MODIFIED: Smaller) */
         #vinScanArea {
             position: absolute;
             top: 50%; /* Center vertically */
             left: 50%; /* Center horizontally */
             transform: translate(-50%, -50%); /* Adjust for its own size */
-            height: 90%; /* Increased height to make the circle larger */
+            height: 70%; /* MODIFIED: Reduced height to make the circle smaller */
             aspect-ratio: 1 / 1; /* Ensures it's a perfect circle (width will match height) */
             border: 3px solid #ffc107;
             border-radius: 50%; /* Makes it a circle */
@@ -740,4 +740,3 @@
 </script>
 </body>
 </html>
-
