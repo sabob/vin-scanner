@@ -333,6 +333,12 @@
       let isScanning = false;
       let worker = null; // Declare worker globally (though Tesseract.js is largely replaced by backend POST)
 
+      // --- IMPORTANT: Replace this with your actual Bearer token ---
+      // For production, this token should NEVER be hardcoded directly in client-side JS.
+      // Consider backend proxies or secure OAuth flows.
+      const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE";
+      // -------------------------------------------------------------
+
       // Initialize Tesseract.js worker - Kept for potential local fallback or display, but main VIN extraction is server-side
       async function initializeTesseractWorker() {
         if (worker) return; // Worker already initialized
@@ -406,21 +412,23 @@
       async function postImageForVinExtraction(imageDataUrl) {
         try {
           vinBox.innerHTML = "<p>Sending image to AI for VIN extraction...</p>";
+
           const response = await fetch("http://localhost:8080/path", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Authorization": `Bearer ${BEARER_TOKEN}` // <<< ADDED BEARER TOKEN HERE
             },
             // The OpenAPI client JSON expects 'image' as a Base64 string (without the "data:image/..." prefix)
             // and a 'message' field.
             body: JSON.stringify({
               image: imageDataUrl.split(",")[1], // Extract only the Base64 part
-              message: "extract the vin from the image and return the result in the following JSON format {\"vin\: \"<vin-here>\"}",
+              message: "extract the vin from the image and return the result in the following JSON format {\"vin\": \"<vin-here>\"}",
             }),
           });
 
           if (!response.ok) {
-            // Handle HTTP errors (e.g., 404, 500)
+            // Handle HTTP errors (e.g., 401 Unauthorized, 403 Forbidden, 404, 500)
             const errorText = await response.text();
             throw new Error(
               `Server responded with error: ${response.status} ${response.statusText} - ${errorText}`
@@ -596,4 +604,3 @@
     </script>
   </body>
 </html>
-```
