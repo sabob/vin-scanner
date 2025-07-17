@@ -17,7 +17,6 @@
       *::before,
       *::after {
         box-sizing: border-box;
-        /* outline: 1px solid rgba(255, 0, 0, 0.3); /* Temporary for debugging */
       }
       body {
         font-family: sans-serif;
@@ -31,6 +30,8 @@
         position: relative;
         width: 100%;
         overflow-x: hidden;
+        /* --- FIX: Keep scrollbar always present to prevent layout shifts --- */
+        overflow-y: scroll;
       }
 
       h2 {
@@ -119,7 +120,7 @@
         border: 1px solid #28a745;
         padding: 0.75rem;
         border-radius: 6px;
-        min-height: 50px;
+        min-height: 50px; /* Set a fixed minimum height */
         width: 100%;
         display: flex;
         flex-direction: column;
@@ -133,12 +134,17 @@
         margin: 0;
         padding: 0;
         max-width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap; /* Allow wrapping for long VINs + confidence */
       }
 
-      #vinBox small {
+      #vinBox .confidence {
         font-size: 0.7em;
         color: #555;
-        margin-top: 5px;
+        margin-left: 10px; /* Space between VIN and confidence */
+        white-space: nowrap; /* Keep confidence on one line */
       }
 
       /* Scan Button (RED BUTTON) */
@@ -148,40 +154,75 @@
         height: 80px;
         border-radius: 50%;
         font-weight: bold;
-        font-size: 1.1rem;
+        font-size: 1.1rem; /* Base font size */
         cursor: pointer;
         border: none;
         background-color: red;
         color: white;
         box-shadow: 0 0 8px rgba(255, 0, 0, 0.6);
         transition: background-color 0.3s ease;
-        display: block;
+        display: flex; /* Use flexbox to center content */
+        justify-content: center; /* Center horizontally */
+        align-items: center; /* Center vertically */
         margin-left: auto;
         margin-right: auto;
+        white-space: nowrap; /* Prevent text wrapping */
+        overflow: hidden; /* Hide any overflow */
+        position: relative; /* Needed for absolute positioning of dots */
       }
 
       button#toggleScanBtn.scanning {
         background-color: orange;
+        font-size: 0; /* Hide button text completely */
+        pointer-events: none; /* Disable clicks while scanning/animating */
       }
 
-      /* View Snapshot Button - DEEMPHASIZED */
-      #viewSnapshotBtn {
-        display: none;
-        margin-top: 0.75rem;
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-        font-weight: normal;
-        color: #555;
-        background-color: #e0e0e0;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+      /* --- Animated Round Dots --- */
+
+      /* Individual dot styles (applied to children of ::before, dynamically created) */
+      /* We will use a more robust way without direct ::after, ::before content manipulation for dots */
+      /* Instead, we'll generate spans for dots within the button and animate them directly */
+
+      /* Let's adjust the structure slightly for better dot control */
+      button#toggleScanBtn span.dot {
+        display: inline-block; /* Make them inline-block so they sit side by side */
+        width: 8px; /* Size of each dot */
+        height: 8px;
+        background-color: white;
+        border-radius: 50%; /* Make them round */
+        margin: 0 3px; /* Space between dots */
+        opacity: 0; /* Start hidden */
+        animation: dotFade 1.5s infinite; /* Animation applied to each dot */
       }
-      #viewSnapshotBtn:hover {
-        background-color: #d0d0d0;
-        color: #333;
-        border-color: #bbb;
+
+      /* Animation delays for staggered effect */
+      button#toggleScanBtn span.dot:nth-child(1) {
+        animation-delay: 0s;
+      }
+      button#toggleScanBtn span.dot:nth-child(2) {
+        animation-delay: 0.5s; /* Delay second dot */
+      }
+      button#toggleScanBtn span.dot:nth-child(3) {
+        animation-delay: 1s; /* Delay third dot */
+      }
+
+      @keyframes dotFade {
+        0%,
+        20% {
+          opacity: 0; /* Hidden */
+        }
+        40%,
+        80% {
+          opacity: 1; /* Visible */
+        }
+        100% {
+          opacity: 0; /* Hidden again */
+        }
+      }
+
+      /* When not scanning, ensure dots are hidden */
+      button#toggleScanBtn:not(.scanning) span.dot {
+        display: none;
       }
 
       /* Styles for the captured image display */
@@ -217,23 +258,6 @@
         margin-bottom: 0;
       }
 
-      /* Debug Output Area */
-      #debugOutput {
-        white-space: pre-wrap; /* Preserve line breaks and spaces */
-        font-family: monospace; /* Monospace font for readability */
-        font-size: 0.7em;
-        color: #666;
-        background: #f0f0f0;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 10px;
-        margin-top: 15px;
-        width: 100%;
-        max-height: 200px; /* Limit height to prevent taking too much screen */
-        overflow-y: auto; /* Enable scrolling for long logs */
-        box-sizing: border-box; /* Include padding/border in width/height */
-      }
-
       /* --- Media Queries for Larger Screens --- */
 
       @media (min-width: 480px) {
@@ -243,11 +267,11 @@
         button#toggleScanBtn {
           width: 90px;
           height: 90px;
-          font-size: 1.2rem;
+          font-size: 1.2rem; /* Base font size for larger screens */
         }
-        #viewSnapshotBtn {
-          font-size: 1rem;
-          padding: 0.7rem 1.5rem;
+        button#toggleScanBtn span.dot {
+          width: 10px; /* Larger dots for bigger buttons */
+          height: 10px;
         }
       }
 
@@ -255,7 +279,7 @@
         #vinBox {
           font-size: 1.4rem;
         }
-        #vinBox small {
+        #vinBox .confidence {
           font-size: 0.8em;
         }
       }
@@ -275,19 +299,24 @@
         <p>Point camera at VIN and press Start</p>
       </div>
 
-      <button id="toggleScanBtn">Start</button>
+      <button id="toggleScanBtn">
+        <span>Start</span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </button>
 
       <div id="capturedImageDisplay">
         <h3>Captured Snapshot</h3>
         <img id="displayedCapturedImage" alt="Captured Frame" />
         <p>This is the image used for the last VIN scan.</p>
       </div>
-
-      <pre id="debugOutput"></pre>
     </div>
 
     <script>
       const toggleBtn = document.getElementById("toggleScanBtn");
+      const toggleBtnText = toggleBtn.querySelector("span:first-child"); // Reference to the "Start/Scan" text span
+      const dots = toggleBtn.querySelectorAll(".dot"); // Reference to the dot spans
       const video = document.getElementById("video");
       const vinBox = document.getElementById("vinBox");
       const displayedCapturedImageEl = document.getElementById(
@@ -298,26 +327,17 @@
       );
       const placeholder = document.getElementById("videoPlaceholder");
       const vinScanArea = document.getElementById("vinScanArea");
-      const debugOutput = document.getElementById("debugOutput"); // Get reference to new element
 
       let stream = null;
       let cameraOn = false;
       let isScanning = false;
       let worker = null; // Declare worker globally
 
-      // Function to log messages to both console and UI
-      function logDebug(message) {
-        console.log(message);
-        debugOutput.textContent += message + "\n";
-        debugOutput.scrollTop = debugOutput.scrollHeight; // Auto-scroll to bottom
-      }
-
       // Initialize Tesseract.js worker
       async function initializeTesseractWorker() {
         if (worker) return; // Worker already initialized
 
         vinBox.innerHTML = "<p>Loading OCR engine...</p>";
-        logDebug("Initializing Tesseract worker...");
 
         worker = await Tesseract.createWorker("eng", 3, {
           logger: (m) => {
@@ -330,8 +350,6 @@
                 m.progress * 100
               )}%</p`;
             }
-            // We'll primarily rely on our custom logs for debug, but still keep this for general progress
-            // console.log(m);
           },
         });
 
@@ -341,14 +359,11 @@
         });
 
         vinBox.innerHTML = "<p>Point camera at VIN and press Start</p>";
-        logDebug("Tesseract worker initialized.");
       }
 
       async function startCamera() {
         if (!stream) {
           try {
-            debugOutput.textContent = ""; // Clear previous logs
-            logDebug("Attempting to start camera...");
             stream = await navigator.mediaDevices.getUserMedia({
               video: {
                 facingMode: "environment",
@@ -362,9 +377,8 @@
             placeholder.style.display = "none";
             vinScanArea.style.display = "block";
             cameraOn = true;
-            toggleBtn.textContent = "Scan";
+            toggleBtnText.textContent = "Scan"; // Update this reference
             vinBox.innerHTML = "<p>Align VIN with the yellow circle</p>";
-            logDebug("Camera started successfully.");
 
             // Ensure the image display is hidden when camera starts
             displayedCapturedImageEl.src = ""; // Clear previously displayed image
@@ -378,7 +392,6 @@
               err.message +
               "\nPlease grant camera access to use the scanner.";
             alert(errorMessage);
-            logDebug("Camera access error: " + err.message);
             console.error("Camera access error:", err);
             return false;
           }
@@ -390,11 +403,10 @@
         if (isScanning || !worker) return;
         isScanning = true;
         toggleBtn.classList.add("scanning");
-        toggleBtn.textContent = "Scanning...";
+        toggleBtnText.style.display = "none"; // Hide the "Scan" text
 
         vinBox.innerHTML = "<p>Scanning...</p>";
         capturedImageDisplayDiv.style.display = "none"; // Hide image during scan to show new one
-        debugOutput.textContent = ""; // Clear previous logs for a fresh scan output
 
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
@@ -473,55 +485,6 @@
         canvas.width = cropWidth;
         canvas.height = cropHeight;
 
-        // --- DEBUG LOGGING ON UI ---
-        logDebug("--- Scan Frame Debug Info ---");
-        logDebug(
-          `Video Intrinsic: ${videoIntrinsicWidth}x${videoIntrinsicHeight}`
-        );
-        logDebug(
-          `Container CSS: ${containerWidth.toFixed(
-            0
-          )}x${containerHeight.toFixed(0)}`
-        );
-        logDebug(
-          `Intrinsic Aspect: ${videoIntrinsicAspect.toFixed(
-            2
-          )}, Container Aspect: ${containerAspect.toFixed(2)}`
-        );
-        logDebug(
-          `Rendered Video In Intrinsic Pixels (Effective Viewport): ${renderedVideoWidthInIntrinsicPixels.toFixed(
-            0
-          )}x${renderedVideoHeightInIntrinsicPixels.toFixed(0)}`
-        );
-        logDebug(
-          `Rendered Offset In Intrinsic Pixels: X=${renderedOffsetXInIntrinsicPixels.toFixed(
-            0
-          )}, Y=${renderedOffsetYInIntrinsicPixels.toFixed(0)}`
-        );
-        logDebug(
-          `Scan Area CSS (rel to container): X=${scanAreaX_css_relative_to_container_untransformed.toFixed(
-            0
-          )}, Y=${scanAreaY_css_relative_to_container_untransformed.toFixed(
-            0
-          )}, W=${scanAreaWidth_css.toFixed(0)}, H=${scanAreaHeight_css.toFixed(
-            0
-          )}`
-        );
-        logDebug(
-          `Scale Factors (CSS to Intrinsic): X=${scaleFactorX_css_to_intrinsic.toFixed(
-            2
-          )}, Y=${scaleFactorY_css_to_intrinsic.toFixed(2)}`
-        );
-        logDebug(
-          `Final Canvas Crop (Intrinsic Video Pixels): X=${cropX.toFixed(
-            0
-          )}, Y=${cropY.toFixed(0)}, W=${cropWidth.toFixed(
-            0
-          )}, H=${cropHeight.toFixed(0)}`
-        );
-        logDebug("----------------------------");
-        // --- END DEBUG LOGGING ON UI ---
-
         ctx.drawImage(
           video,
           cropX,
@@ -539,22 +502,15 @@
         try {
           const result = await worker.recognize(canvas);
 
-          // CORRECTED: Fixed regex and array access for vinMatch
           const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
           if (vinMatch) {
-            const vin = vinMatch[0]; // Corrected: Use [0] for array access
+            const vin = vinMatch[0];
             const confidence = result.data.confidence
               ? result.data.confidence.toFixed(1)
               : "N/A";
-            vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a></p><small>Confidence: ${confidence}%</small>`;
-            logDebug(`OCR Result: ${vin}, Confidence: ${confidence}%`);
+            vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a> <span class="confidence">(${confidence}%)</span></p>`;
           } else {
-            vinBox.innerHTML = `<p>No valid 17-character VIN found.</p><small>Try aligning the VIN better.</small>`;
-            logDebug(
-              `OCR Result: No VIN found. Text: ${result.data.text
-                .trim()
-                .substring(0, 100)}...`
-            );
+            vinBox.innerHTML = `<p>No valid 17-character VIN found.</p>`;
           }
 
           // Always display the image after a scan is attempted
@@ -564,13 +520,14 @@
           vinBox.innerHTML = `<p style="color: red;">OCR Error: ${
             e.message || "Check console."
           }</p>`;
-          logDebug(`OCR Error: ${e.message || "Unknown error"}`);
           // Always display the image even if OCR fails
           capturedImageDisplayDiv.style.display = "block";
         } finally {
+          // --- PAUSE REMOVED HERE ---
           isScanning = false;
           toggleBtn.classList.remove("scanning");
-          toggleBtn.textContent = "Scan";
+          toggleBtnText.style.display = "inline"; // Show the "Scan" text again
+          toggleBtnText.textContent = "Scan"; // Reset button text
         }
       }
 
@@ -579,11 +536,24 @@
           const ready = await startCamera();
           if (!ready) return;
         } else {
+          // Prevent multiple scans if already scanning or worker initializing
+          if (isScanning) return;
+
           // Ensure worker is ready before scanning
           if (!worker) {
             vinBox.innerHTML = "<p>Initializing OCR engine, please wait...</p>";
-            logDebug("Initializing OCR engine from button click...");
+            // Briefly set the button to "..." while worker initializes
+            toggleBtn.classList.add("scanning");
+            toggleBtnText.style.display = "none";
+
             await initializeTesseractWorker();
+
+            // After worker init, if not yet scanning, prepare for scan or reset
+            if (!isScanning) {
+                toggleBtn.classList.remove("scanning");
+                toggleBtnText.style.display = "inline";
+                toggleBtnText.textContent = "Scan";
+            }
           }
           await scanFrame();
         }
@@ -595,7 +565,6 @@
         }
         if (worker) {
           worker.terminate(); // Terminate worker to free up resources
-          logDebug("Tesseract worker terminated.");
         }
       });
     </script>
