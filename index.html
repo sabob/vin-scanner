@@ -35,16 +35,12 @@
             overflow-y: scroll;
         }
 
-        h2 {
-            margin-top: 1rem;
-            text-align: center;
-            width: 100%;
-        }
+        /* Removed h2 styling as the heading is now gone */
 
         /* Main Content Area */
         #mainContent {
             width: 100%;
-            max-width: 480px; /* Constrain width on all screens */
+            max-width: 600px; /* Increased max-width for bigger video area */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -55,9 +51,9 @@
         /* Camera Container with ROI Overlay */
         #container {
             width: 100%;
-            aspect-ratio: 16 / 9;
+            aspect-ratio: 4 / 3; /* Changed aspect ratio to make it taller */
             position: relative;
-            margin-top: 1rem;
+            margin-top: 1rem; /* Reduced margin-top to move it closer to the top */
             border-radius: 12px;
             overflow: hidden;
             background: #e9e9e9;
@@ -74,12 +70,27 @@
             width: 100%;
             height: 100%;
             display: flex;
+            flex-direction: column; /* Allows stacking of title and original text */
             justify-content: center;
             align-items: center;
             color: #555;
             font-size: 1.1rem;
             z-index: 1;
+            text-align: center; /* Center the text */
+            padding: 1rem; /* Add some padding */
         }
+
+        #videoPlaceholder h2 { /* New style for the integrated heading */
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+
+        #videoPlaceholder p { /* Style for the original text */
+            margin-top: 0;
+            font-size: 1.1rem;
+        }
+
 
         video {
             position: absolute;
@@ -114,7 +125,7 @@
             font-weight: bold;
             font-size: 1.2rem;
             color: #28a745;
-            margin-top: 1.5rem;
+            margin-top: 2rem; /* Adjusted margin-top for better spacing */
             white-space: pre-wrap;
             text-align: center;
             background: white;
@@ -150,7 +161,7 @@
 
         /* Scan Button (RED BUTTON) */
         button#toggleScanBtn {
-            margin-top: 1.5rem;
+            margin-top: 2rem; /* Adjusted margin-top for better spacing */
             width: 80px;
             height: 80px;
             border-radius: 50%;
@@ -333,11 +344,12 @@
     </style>
 </head>
 <body>
-<h2>AI VIN Scanner</h2>
-
 <div id="mainContent">
     <div id="container">
-        <div id="videoPlaceholder">Camera will appear here</div>
+        <div id="videoPlaceholder">
+            <h2>AI VIN Scanner</h2>
+            <p>Camera will appear here</p>
+        </div>
         <video id="video" autoplay playsinline></video>
         <div id="vinScanArea"></div>
     </div>
@@ -501,7 +513,7 @@
         } catch (error) {
             console.error("Error posting image or processing VIN from server:", error);
             vinBox.innerHTML = `<p style="color: red;">Failed to get VIN from AI. ${
-                error.message || "Please check server connection."
+                error.message || "An unexpected error occurred."
             }</p>`;
             return null;
         }
@@ -536,12 +548,15 @@
 
         vinBox.innerHTML = "<p>Capturing snapshot...</p>";
 
-        // Always hide capturedImageDisplayDiv and related buttons at the start of a scan
-        // This ensures it's hidden before a new image is captured or an old one is rescanned
+        // Always hide capturedImageDisplayDiv and reset button text at the start of a scan
         capturedImageDisplayDiv.style.display = "none";
-        rescanImageBtn.style.display = "none";
-        showLastScanBtn.style.display = "none";
         showLastScanBtn.textContent = "Show Last Scan"; // Reset button text
+
+        // Only hide rescanImageBtn if it's a new capture, not a rescan of an existing image
+        if (!useLastImage) {
+            rescanImageBtn.style.display = "none";
+            showLastScanBtn.style.display = "none"; // Hide "Show Last Scan" button initially for new capture
+        }
 
         let imageDataUrlToUse;
 
@@ -639,7 +654,7 @@
         // Always update the displayed image source
         displayedCapturedImageEl.src = imageDataUrlToUse;
 
-        // Only show the rescan button and "Show Last Scan" button, NOT the capturedImageDisplayDiv itself
+        // Show the rescan button and "Show Last Scan" button now that an image has been processed
         rescanImageBtn.style.display = "inline-block";
         showLastScanBtn.style.display = "inline-block";
 
@@ -700,6 +715,22 @@
         }
     });
 
+    // --- NEW: Keyboard event listener for Spacebar and Enter ---
+    document.addEventListener('keydown', (event) => {
+        // Check if the pressed key is Spacebar or Enter
+        if (event.code === 'Space' || event.code === 'Enter') {
+            event.preventDefault(); // Prevent default browser action (e.g., scrolling with spacebar)
+
+            // Check if 'Show Last Scan' button is currently focused
+            if (document.activeElement === showLastScanBtn) {
+                showLastScanBtn.click(); // Trigger click on Show Last Scan button
+            } else {
+                toggleBtn.click(); // Trigger click on the main Scan button
+            }
+        }
+    });
+    // --- END NEW ---
+
 
     window.addEventListener("beforeunload", () => {
         if (stream) {
@@ -709,3 +740,4 @@
 </script>
 </body>
 </html>
+
