@@ -1,4 +1,4 @@
-public enum ContentType {
+public enum ContentTypeTO {
     TEXT("text"),
     IMAGE_URL("image_url"),
     UNKNOWN("unknown");  // fallback
@@ -13,8 +13,8 @@ public enum ContentType {
         return value;
     }
 
-    public static ContentType fromString(String s) {
-        for (ContentType ct : values()) {
+    public static ContentTypeTO fromString(String s) {
+        for (ContentTypeTO ct : values()) {
             if (ct.value.equalsIgnoreCase(s)) {
                 return ct;
             }

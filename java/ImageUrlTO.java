@@ -1,5 +1,13 @@
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
 @Data
-    public static class ImageUrlTO {
-        private String url;
-        private String detail;
-    }
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class ImageUrlTO {
+    private String url;
+    private String detail; // e.g., "low", "high", "auto"
+}
