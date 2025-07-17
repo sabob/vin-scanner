@@ -230,7 +230,7 @@
 
         /* Styles for the captured image display */
         #capturedImageDisplay {
-            display: none;
+            display: none; /* Hidden by default */
             margin-top: 1.5rem;
             width: 100%;
             max-width: 480px;
@@ -272,7 +272,7 @@
             font-size: 1rem;
             cursor: pointer;
             transition: background-color 0.3s ease;
-            display: none; /* Hidden by default */
+            display: none; /* Hidden by default, controlled by JS */
         }
 
         button#rescanImageBtn:hover {
@@ -282,6 +282,24 @@
         button#rescanImageBtn.scanning {
             background-color: orange;
             pointer-events: none; /* Disable clicks while scanning/animating */
+        }
+
+        /* Show Last Scan Button */
+        button#showLastScanBtn {
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #6c757d; /* Gray color */
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            display: none; /* Hidden by default, will be shown by JS only when an image exists */
+        }
+
+        button#showLastScanBtn:hover {
+            background-color: #5a6268;
         }
 
         /* --- Media Queries for Larger Screens --- */
@@ -335,6 +353,8 @@
         <span class="dot"></span>
     </button>
 
+    <button id="showLastScanBtn">Show Last Scan</button>
+
     <div id="capturedImageDisplay">
         <h3>Captured Snapshot</h3>
         <img id="displayedCapturedImage" alt="Captured Frame"/>
@@ -358,6 +378,7 @@
     const placeholder = document.getElementById("videoPlaceholder");
     const vinScanArea = document.getElementById("vinScanArea");
     const rescanImageBtn = document.getElementById("rescanImageBtn"); // New button
+    const showLastScanBtn = document.getElementById("showLastScanBtn"); // New button for toggling visibility
 
     let stream = null;
     let cameraOn = false;
@@ -394,6 +415,7 @@
                 displayedCapturedImageEl.src = ""; // Clear previously displayed image
                 capturedImageDisplayDiv.style.display = "none";
                 rescanImageBtn.style.display = "none";
+                showLastScanBtn.style.display = "none"; // Hide show last scan button too
                 lastCapturedImageDataUrl = null; // Clear last captured image data
             } catch (err) {
                 const errorMessage =
@@ -513,11 +535,13 @@
         dots.forEach(dot => dot.style.display = "inline-block"); // Show dots
 
         vinBox.innerHTML = "<p>Capturing snapshot...</p>";
-        // Do not hide capturedImageDisplayDiv if we are using the last image for rescan
-        if (!useLastImage) {
-            capturedImageDisplayDiv.style.display = "none"; // Hide previous image during new scan
-            rescanImageBtn.style.display = "none"; // Hide rescan button for a new capture
-        }
+
+        // Always hide capturedImageDisplayDiv and related buttons at the start of a scan
+        // This ensures it's hidden before a new image is captured or an old one is rescanned
+        capturedImageDisplayDiv.style.display = "none";
+        rescanImageBtn.style.display = "none";
+        showLastScanBtn.style.display = "none";
+        showLastScanBtn.textContent = "Show Last Scan"; // Reset button text
 
         let imageDataUrlToUse;
 
@@ -585,8 +609,8 @@
             const cropY = Math.max(
                 0,
                 renderedOffsetYInIntrinsicPixels +
-                scanAreaY_css_relative_to_container_untransformed *
-                scaleFactorY_css_to_intrinsic // CORRECTED LINE
+                scanAreaY_css_relative_to_container_untransformed * // Corrected variable name
+                scaleFactorY_css_to_intrinsic
             );
             const cropWidth = scanAreaWidth_css * scaleFactorX_css_to_intrinsic;
             const cropHeight = scanAreaHeight_css * scaleFactorY_css_to_intrinsic;
@@ -610,12 +634,15 @@
             // Convert the cropped image to a Data URL (e.g., JPEG for efficiency)
             imageDataUrlToUse = canvas.toDataURL("image/jpeg", 0.9); // 0.9 quality for JPEG
             lastCapturedImageDataUrl = imageDataUrlToUse; // Store for potential rescan
-
-            // Display the newly captured image on the page
-            displayedCapturedImageEl.src = imageDataUrlToUse;
-            capturedImageDisplayDiv.style.display = "block";
-            rescanImageBtn.style.display = "inline-block"; // Show the rescan button
         }
+
+        // Always update the displayed image source
+        displayedCapturedImageEl.src = imageDataUrlToUse;
+
+        // Only show the rescan button and "Show Last Scan" button, NOT the capturedImageDisplayDiv itself
+        rescanImageBtn.style.display = "inline-block";
+        showLastScanBtn.style.display = "inline-block";
+
 
         try {
             // POST the captured image to the server and get the VIN
@@ -661,6 +688,18 @@
             alert("No image has been captured yet to rescan!");
         }
     });
+
+    // Event listener for the "Show Last Scan" button
+    showLastScanBtn.addEventListener("click", () => {
+        if (capturedImageDisplayDiv.style.display === "none") {
+            capturedImageDisplayDiv.style.display = "block";
+            showLastScanBtn.textContent = "Hide Last Scan";
+        } else {
+            capturedImageDisplayDiv.style.display = "none";
+            showLastScanBtn.textContent = "Show Last Scan";
+        }
+    });
+
 
     window.addEventListener("beforeunload", () => {
         if (stream) {
