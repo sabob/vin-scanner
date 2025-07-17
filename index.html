@@ -479,7 +479,7 @@
         const body = JSON.stringify(payload);
 
         try {
-            vinBox.innerHTML = `<p>${isRescan ? 'Rescanning' : 'Sending'} image to AI for VIN extraction...</p>`;
+            vinBox.innerHTML = `<p>${isRescan ? 'Rescanning' : 'Scanning'} image for VIN...</p>`;
 
             const response = await fetch("http://localhost:8080/llmapi/v1/chat/completions", {
                 method: "POST",
