@@ -7,7 +7,6 @@
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
     <title>AI VIN Scanner</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
       #vinBox a {
         color: #28a745;
@@ -331,40 +330,12 @@
       let stream = null;
       let cameraOn = false;
       let isScanning = false;
-      let worker = null; // Declare worker globally (though Tesseract.js is largely replaced by backend POST)
 
       // --- IMPORTANT: Replace this with your actual Bearer token ---
       // For production, this token should NEVER be hardcoded directly in client-side JS.
       // Consider backend proxies or secure OAuth flows.
       const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE";
       // -------------------------------------------------------------
-
-      // Initialize Tesseract.js worker - Kept for potential local fallback or display, but main VIN extraction is server-side
-      async function initializeTesseractWorker() {
-        if (worker) return; // Worker already initialized
-
-        vinBox.innerHTML = "<p>Loading local OCR engine (optional for display)...</p>";
-
-        // Tesseract worker creation, parameters, and logger can remain for local testing/display,
-        // but its primary function for VIN extraction is now handled by the server POST.
-        worker = await Tesseract.createWorker("eng", 3, {
-          logger: (m) => {
-            // You can adjust these messages to reflect that server processing is happening
-            if (m.status === "loading" || m.status === "initializing") {
-              // vinBox.innerHTML = `<p>Loading OCR: ${Math.round(m.progress * 100)}%</p>`;
-            } else if (m.status === "recognizing") {
-              // vinBox.innerHTML = `<p>Scanning: ${Math.round(m.progress * 100)}%</p`;
-            }
-          },
-        });
-
-        await worker.setParameters({
-          tessedit_char_whitelist: "ABCDEFGHJKLMNPRSTUVWXYZ0123456789",
-          psm: 7,
-        });
-
-        vinBox.innerHTML = "<p>Point camera at VIN and press Start</p>";
-      }
 
       async function startCamera() {
         if (!stream) {
@@ -388,9 +359,6 @@
             // Ensure the image display is hidden when camera starts
             displayedCapturedImageEl.src = ""; // Clear previously displayed image
             capturedImageDisplayDiv.style.display = "none";
-
-            // Pre-load Tesseract.js worker if you still want it for local fallback/display
-            await initializeTesseractWorker();
           } catch (err) {
             const errorMessage =
               "Camera permission denied: " +
@@ -584,10 +552,6 @@
         } else {
           // Prevent multiple scans if already scanning
           if (isScanning) return;
-
-          // You might still want initializeTesseractWorker() called from startCamera
-          // if you want its loading messages or a local fallback OCR.
-          // Otherwise, it's not strictly needed for the server-side POST logic.
           await scanFrame();
         }
       });
@@ -595,10 +559,6 @@
       window.addEventListener("beforeunload", () => {
         if (stream) {
           stream.getTracks().forEach((track) => track.stop());
-        }
-        // Terminate Tesseract.js worker if it was initialized
-        if (worker) {
-          worker.terminate();
         }
       });
     </script>
