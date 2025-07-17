@@ -4,23 +4,26 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class MessageTO {
+public class LLM2MessageTO {
     @NotNull(message = "Role is required for a message")
     private String role; // e.g., "system", "user", "assistant", "tool"
 
     @NotNull(message = "Content is required for a message")
     @Size(min = 1, message = "At least one content part is required")
-    private List<@NotNull ContentPartTO> content;
+    private List<@NotNull LLM2ContentPartTO> content;
 
     // Optional: For messages from the 'tool' role, the ID of the tool call this message is responding to.
-    private String tool_call_id;
+    @JsonProperty("tool_call_id") // Maps camelCase to snake_case
+    private String toolCallId;
 
     // If you need to support tool calls in assistant messages, you'd define ToolCall and include:
-    // private List<ToolCall> tool_calls;
+    // @JsonProperty("tool_calls")
+    // private List<LLM2ToolCallTO> toolCalls;
 }

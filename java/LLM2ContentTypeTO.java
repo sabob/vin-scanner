@@ -1,11 +1,13 @@
-public enum ContentTypeTO {
+// Enums typically don't use @Data, @NoArgsConstructor, @AllArgsConstructor, @Builder
+// as their instances are fixed and created internally.
+public enum LLM2ContentTypeTO {
     TEXT("text"),
     IMAGE_URL("image_url"),
     UNKNOWN("unknown");  // fallback
 
     private final String value;
 
-    ContentTypeTO(String value) {
+    LLM2ContentTypeTO(String value) {
         this.value = value;
     }
 
@@ -13,8 +15,8 @@ public enum ContentTypeTO {
         return value;
     }
 
-    public static ContentTypeTO fromString(String s) {
-        for (ContentTypeTO ct : values()) {
+    public static LLM2ContentTypeTO fromString(String s) {
+        for (LLM2ContentTypeTO ct : values()) {
             if (ct.value.equalsIgnoreCase(s)) {
                 return ct;
             }

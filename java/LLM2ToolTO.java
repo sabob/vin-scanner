@@ -8,10 +8,10 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ToolTO {
+public class LLM2ToolTO {
     @NotNull(message = "Tool type is required")
     private String type; // Currently, only "function" is supported
 
     @NotNull(message = "Function definition is required for a tool")
-    private FunctionDefinitionTO function;
+    private LLM2FunctionDefinitionTO function;
 }

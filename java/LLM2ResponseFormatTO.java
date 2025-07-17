@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ResponseFormatTO {
+public class LLM2ResponseFormatTO {
     @NotNull(message = "Response format type is required")
     private String type; // Must be "text" or "json_object"
 }

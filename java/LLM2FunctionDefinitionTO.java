@@ -8,9 +8,9 @@ import jakarta.validation.constraints.NotNull;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FunctionDefinitionTO {
+public class LLM2FunctionDefinitionTO {
     private String description; // An optional description of the function
     @NotNull(message = "Function name is required")
     private String name; // The name of the function to be called
-    private FunctionParametersTO parameters; // The parameters the function accepts
+    private LLM2FunctionParametersTO parameters; // The parameters the function accepts
 }

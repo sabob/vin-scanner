@@ -3,6 +3,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import jakarta.validation.constraints.NotNull;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
 
 /**
@@ -14,7 +15,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ContentPartTO {
+public class LLM2ContentPartTO {
 
     /**
      * The content type, e.g. "text", "image_url", etc.
@@ -30,7 +31,8 @@ public class ContentPartTO {
     /**
      * Present if type == "image_url"
      */
-    private ImageUrlTO image_url;
+    @JsonProperty("image_url") // Maps camelCase to snake_case
+    private LLM2ImageUrlTO imageUrl;
 
     // Optional: For any additional or future fields not explicitly modeled by OpenAI or your API
     private Map<String, Object> extensions;
@@ -39,7 +41,7 @@ public class ContentPartTO {
     /**
      * Helper method to get the content type as an enum.
      */
-    public ContentTypeTO getContentType() {
-        return ContentTypeTO.fromString(type);
+    public LLM2ContentTypeTO getContentType() {
+        return LLM2ContentTypeTO.fromString(type);
     }
 }

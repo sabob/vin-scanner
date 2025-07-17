@@ -10,7 +10,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FunctionParametersTO {
+public class LLM2FunctionParametersTO {
     @NotNull(message = "Function parameters type is required (e.g., 'object')")
     private String type; // Typically "object" for JSON Schema
 
