@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
-    <title>VIN Scanner (Tesseract.js v5)</title>
+    <title>AI VIN Scanner</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
       #vinBox a {
@@ -331,24 +331,23 @@
       let stream = null;
       let cameraOn = false;
       let isScanning = false;
-      let worker = null; // Declare worker globally
+      let worker = null; // Declare worker globally (though Tesseract.js is largely replaced by backend POST)
 
-      // Initialize Tesseract.js worker
+      // Initialize Tesseract.js worker - Kept for potential local fallback or display, but main VIN extraction is server-side
       async function initializeTesseractWorker() {
         if (worker) return; // Worker already initialized
 
-        vinBox.innerHTML = "<p>Loading OCR engine...</p>";
+        vinBox.innerHTML = "<p>Loading local OCR engine (optional for display)...</p>";
 
+        // Tesseract worker creation, parameters, and logger can remain for local testing/display,
+        // but its primary function for VIN extraction is now handled by the server POST.
         worker = await Tesseract.createWorker("eng", 3, {
           logger: (m) => {
+            // You can adjust these messages to reflect that server processing is happening
             if (m.status === "loading" || m.status === "initializing") {
-              vinBox.innerHTML = `<p>Loading OCR: ${Math.round(
-                m.progress * 100
-              )}%</p>`;
+              // vinBox.innerHTML = `<p>Loading OCR: ${Math.round(m.progress * 100)}%</p>`;
             } else if (m.status === "recognizing") {
-              vinBox.innerHTML = `<p>Scanning: ${Math.round(
-                m.progress * 100
-              )}%</p`;
+              // vinBox.innerHTML = `<p>Scanning: ${Math.round(m.progress * 100)}%</p`;
             }
           },
         });
@@ -384,7 +383,7 @@
             displayedCapturedImageEl.src = ""; // Clear previously displayed image
             capturedImageDisplayDiv.style.display = "none";
 
-            // Pre-load Tesseract.js worker when camera starts
+            // Pre-load Tesseract.js worker if you still want it for local fallback/display
             await initializeTesseractWorker();
           } catch (err) {
             const errorMessage =
@@ -399,14 +398,63 @@
         return true;
       }
 
+      /**
+       * Sends the captured image to the server for VIN extraction.
+       * @param {string} imageDataUrl The Data URL of the captured image (e.g., "data:image/jpeg;base64,...").
+       * @returns {Promise<string|null>} A Promise that resolves with the extracted VIN string, or null if not found/error.
+       */
+      async function postImageForVinExtraction(imageDataUrl) {
+        try {
+          vinBox.innerHTML = "<p>Sending image to AI for VIN extraction...</p>";
+          const response = await fetch("http://localhost:8080/path", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            // The OpenAPI client JSON expects 'image' as a Base64 string (without the "data:image/..." prefix)
+            // and a 'message' field.
+            body: JSON.stringify({
+              image: imageDataUrl.split(",")[1], // Extract only the Base64 part
+              message: "extract the vin from the image and return the result in the following JSON format {\"vin\: \"<vin-here>\"}",
+            }),
+          });
+
+          if (!response.ok) {
+            // Handle HTTP errors (e.g., 404, 500)
+            const errorText = await response.text();
+            throw new Error(
+              `Server responded with error: ${response.status} ${response.statusText} - ${errorText}`
+            );
+          }
+
+          const data = await response.json(); // Parse the JSON response
+          console.log("Server response:", data); // Log the full server response for debugging
+
+          // Assuming the server response JSON has a 'vin' field
+          if (data && data.vin) {
+            return data.vin;
+          } else {
+            // Server responded OK, but no VIN was found in its response
+            return null;
+          }
+        } catch (error) {
+          console.error("Error posting image or processing VIN from server:", error);
+          vinBox.innerHTML = `<p style="color: red;">Failed to get VIN from AI. ${
+            error.message || "Please check server connection."
+          }</p>`;
+          return null;
+        }
+      }
+
       async function scanFrame() {
-        if (isScanning || !worker) return;
+        if (isScanning) return; // Prevent multiple scans
         isScanning = true;
         toggleBtn.classList.add("scanning");
         toggleBtnText.style.display = "none"; // Hide the "Scan" text
+        dots.forEach(dot => dot.style.display = "inline-block"); // Show dots
 
-        vinBox.innerHTML = "<p>Scanning...</p>";
-        capturedImageDisplayDiv.style.display = "none"; // Hide image during scan to show new one
+        vinBox.innerHTML = "<p>Capturing snapshot...</p>";
+        capturedImageDisplayDiv.style.display = "none"; // Hide previous image during new scan
 
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
@@ -415,7 +463,7 @@
         const videoIntrinsicHeight = video.videoHeight;
         const videoIntrinsicAspect = videoIntrinsicWidth / videoIntrinsicHeight;
 
-        const containerRect = video.parentElement.getBoundingClientRect(); // The #container element
+        const containerRect = video.parentElement.getBoundingClientRect();
         const containerWidth = containerRect.width;
         const containerHeight = containerRect.height;
         const containerAspect = containerWidth / containerHeight;
@@ -427,8 +475,6 @@
 
         // Calculate the actual visible portion of the intrinsic video frame due to object-fit: cover
         if (videoIntrinsicAspect > containerAspect) {
-          // Video is wider than container aspect. It fills the height of the container,
-          // and gets cropped horizontally.
           renderedVideoHeightInIntrinsicPixels = videoIntrinsicHeight;
           renderedVideoWidthInIntrinsicPixels =
             videoIntrinsicHeight * containerAspect;
@@ -436,8 +482,6 @@
             (videoIntrinsicWidth - renderedVideoWidthInIntrinsicPixels) / 2;
           renderedOffsetYInIntrinsicPixels = 0;
         } else {
-          // Video is taller than container aspect. It fills the width of the container,
-          // and gets cropped vertically.
           renderedVideoWidthInIntrinsicPixels = videoIntrinsicWidth;
           renderedVideoHeightInIntrinsicPixels =
             videoIntrinsicWidth / containerAspect;
@@ -449,7 +493,6 @@
         const scanAreaRect = vinScanArea.getBoundingClientRect();
 
         // Calculate scan area coordinates relative to the *container* in CSS pixels
-        // These will be relative to the top-left of the container, before transform is applied
         const scanAreaX_css_relative_to_container_untransformed =
           scanAreaRect.left - containerRect.left;
         const scanAreaY_css_relative_to_container_untransformed =
@@ -457,15 +500,13 @@
         const scanAreaWidth_css = scanAreaRect.width;
         const scanAreaHeight_css = scanAreaRect.height;
 
-        // Calculate the scaling factors from CSS pixels (of the rendered container) to
-        // intrinsic video pixels (of the effectively displayed intrinsic video area)
+        // Calculate the scaling factors from CSS pixels (of the rendered container) to intrinsic video pixels
         const scaleFactorX_css_to_intrinsic =
           renderedVideoWidthInIntrinsicPixels / containerWidth;
         const scaleFactorY_css_to_intrinsic =
           renderedVideoHeightInIntrinsicPixels / containerHeight;
 
         // Calculate the final crop coordinates and dimensions in intrinsic video pixels
-        // These are the arguments for ctx.drawImage's source rectangle
         const cropX = Math.max(
           0,
           renderedOffsetXInIntrinsicPixels +
@@ -497,37 +538,34 @@
           cropHeight
         );
 
-        displayedCapturedImageEl.src = canvas.toDataURL("image/png"); // Set image source
+        // Convert the cropped image to a Data URL (e.g., JPEG for efficiency)
+        const imageDataUrl = canvas.toDataURL("image/jpeg", 0.9); // 0.9 quality for JPEG
+
+        // Display the captured image on the page
+        displayedCapturedImageEl.src = imageDataUrl;
+        capturedImageDisplayDiv.style.display = "block";
 
         try {
-          const result = await worker.recognize(canvas);
+          // POST the captured image to the server and get the VIN
+          const vin = await postImageForVinExtraction(imageDataUrl);
 
-          const vinMatch = result.data.text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-          if (vinMatch) {
-            const vin = vinMatch[0];
-            const confidence = result.data.confidence
-              ? result.data.confidence.toFixed(1)
-              : "N/A";
-            vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a> <span class="confidence">(${confidence}%)</span></p>`;
+          if (vin) {
+            vinBox.innerHTML = `<p>VIN: <a href="http://localhost:4202/vin/${vin}" target="_blank">${vin}</a></p>`;
+            console.log("VIN successfully extracted by AI:", vin); // Log the VIN to the console
           } else {
-            vinBox.innerHTML = `<p>No valid 17-character VIN found.</p>`;
+            vinBox.innerHTML = `<p>AI could not find a valid VIN.</p>`;
           }
-
-          // Always display the image after a scan is attempted
-          capturedImageDisplayDiv.style.display = "block";
         } catch (e) {
-          console.error("OCR error:", e);
-          vinBox.innerHTML = `<p style="color: red;">OCR Error: ${
-            e.message || "Check console."
+          console.error("Overall scanFrame error:", e);
+          vinBox.innerHTML = `<p style="color: red;">Scan failed: ${
+            e.message || "An unexpected error occurred."
           }</p>`;
-          // Always display the image even if OCR fails
-          capturedImageDisplayDiv.style.display = "block";
         } finally {
-          // --- PAUSE REMOVED HERE ---
           isScanning = false;
           toggleBtn.classList.remove("scanning");
           toggleBtnText.style.display = "inline"; // Show the "Scan" text again
           toggleBtnText.textContent = "Scan"; // Reset button text
+          dots.forEach(dot => dot.style.display = "none"); // Hide dots
         }
       }
 
@@ -536,25 +574,12 @@
           const ready = await startCamera();
           if (!ready) return;
         } else {
-          // Prevent multiple scans if already scanning or worker initializing
+          // Prevent multiple scans if already scanning
           if (isScanning) return;
 
-          // Ensure worker is ready before scanning
-          if (!worker) {
-            vinBox.innerHTML = "<p>Initializing OCR engine, please wait...</p>";
-            // Briefly set the button to "..." while worker initializes
-            toggleBtn.classList.add("scanning");
-            toggleBtnText.style.display = "none";
-
-            await initializeTesseractWorker();
-
-            // After worker init, if not yet scanning, prepare for scan or reset
-            if (!isScanning) {
-                toggleBtn.classList.remove("scanning");
-                toggleBtnText.style.display = "inline";
-                toggleBtnText.textContent = "Scan";
-            }
-          }
+          // You might still want initializeTesseractWorker() called from startCamera
+          // if you want its loading messages or a local fallback OCR.
+          // Otherwise, it's not strictly needed for the server-side POST logic.
           await scanFrame();
         }
       });
@@ -563,10 +588,12 @@
         if (stream) {
           stream.getTracks().forEach((track) => track.stop());
         }
+        // Terminate Tesseract.js worker if it was initialized
         if (worker) {
-          worker.terminate(); // Terminate worker to free up resources
+          worker.terminate();
         }
       });
     </script>
   </body>
 </html>
+```
