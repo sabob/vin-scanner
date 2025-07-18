@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width, initial-scale=1.0, user-scalable=no"
     />
-    <title>AI VIN Scanner</title>
+    <title>3 Click VIN Scanner</title>
     <style>
         #vinBox a {
             color: #28a745;
@@ -22,7 +22,7 @@
         body {
             font-family: sans-serif;
             margin: 0;
-            background: #f5f5f5;
+            background-color: #f5f5f5; /* Fallback background color */
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -31,9 +31,35 @@
             position: relative;
             width: 100%;
             overflow-x: hidden;
-            /* --- FIX: Keep scrollbar always present to prevent layout shifts --- */
-            overflow-y: scroll;
+            overflow-y: scroll; /* Keep scrollbar always present to prevent layout shifts */
+
+            /* --- Background Image Styles --- */
+            background-image: url('t-b.jpg'); /* Your background image */
+            background-size: cover; /* Cover the entire background */
+            background-position: center center; /* Center the image */
+            background-repeat: no-repeat; /* Do not repeat the image */
+            background-attachment: fixed; /* Keep image fixed when scrolling */
+            /* --- End Background Image Styles --- */
         }
+
+        /* --- Overlay for Background Image --- */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.2); /* Initial light overlay (20% black) */
+            z-index: -1; /* Place it behind the content */
+            transition: background-color 0.5s ease-in-out; /* Smooth transition for opacity change */
+        }
+
+        /* When camera is on, increase the overlay opacity to make background fade */
+        body.camera-active::before {
+            background-color: rgba(0, 0, 0, 0.9); /* INCREASED TO 70% OPAQUE BLACK - Makes background much less visible / faded */
+        }
+        /* --- End Overlay --- */
 
         /* Removed h2 styling as the heading is now gone */
 
@@ -46,6 +72,7 @@
             align-items: center;
             flex-grow: 1;
             min-width: 0;
+            z-index: 1; /* Ensure content is above the background overlay */
         }
 
         /* Camera Container with ROI Overlay */
@@ -347,7 +374,7 @@
 <div id="mainContent">
     <div id="container">
         <div id="videoPlaceholder">
-            <h2>AI VIN Scanner</h2>
+            <h2>3 Click VIN Scanner</h2>
             <p>Camera will appear here</p>
         </div>
         <video id="video" autoplay playsinline></video>
@@ -423,6 +450,9 @@
                 toggleBtnText.textContent = "Scan"; // Update this reference
                 vinBox.innerHTML = "<p>Align VIN with the yellow circle</p>";
 
+                // Add the class to fade the background when camera is active
+                document.body.classList.add('camera-active');
+
                 // Ensure the image display and rescan button are hidden when camera starts
                 displayedCapturedImageEl.src = ""; // Clear previously displayed image
                 capturedImageDisplayDiv.style.display = "none";
@@ -485,9 +515,8 @@
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${BEARER_TOKEN}` // <<< ADDED BEARER TOKEN HERE
+                    "Authorization": `Bearer ${BEARER_TOKEN}`
                 },
-
                 body: body,
             });
 
@@ -569,66 +598,32 @@
 
             const videoIntrinsicWidth = video.videoWidth;
             const videoIntrinsicHeight = video.videoHeight;
-            const videoIntrinsicAspect = videoIntrinsicWidth / videoIntrinsicHeight;
 
-            const containerRect = video.parentElement.getBoundingClientRect();
-            const containerWidth = containerRect.width;
-            const containerHeight = containerRect.height;
-            const containerAspect = containerWidth / containerHeight;
+            // Get the actual rendered dimensions of the video element (which can be different from intrinsic)
+            // due to object-fit: cover
+            const videoRenderedWidth = video.offsetWidth;
+            const videoRenderedHeight = video.offsetHeight;
 
-            let renderedVideoWidthInIntrinsicPixels;
-            let renderedVideoHeightInIntrinsicPixels;
-            let renderedOffsetXInIntrinsicPixels = 0;
-            let renderedOffsetYInIntrinsicPixels = 0;
+            // Calculate the actual scale factor from rendered CSS pixels to intrinsic video pixels
+            const scaleX_rendered_to_intrinsic = videoIntrinsicWidth / videoRenderedWidth;
+            const scaleY_rendered_to_intrinsic = videoIntrinsicHeight / videoRenderedHeight;
 
-            // Calculate the actual visible portion of the intrinsic video frame due to object-fit: cover
-            if (videoIntrinsicAspect > containerAspect) {
-                renderedVideoHeightInIntrinsicPixels = videoIntrinsicHeight;
-                renderedVideoWidthInIntrinsicPixels =
-                    videoIntrinsicHeight * containerAspect;
-                renderedOffsetXInIntrinsicPixels =
-                    (videoIntrinsicWidth - renderedVideoWidthInIntrinsicPixels) / 2;
-                renderedOffsetYInIntrinsicPixels = 0;
-            } else {
-                renderedVideoWidthInIntrinsicPixels = videoIntrinsicWidth;
-                renderedVideoHeightInIntrinsicPixels =
-                    videoIntrinsicWidth / containerAspect;
-                renderedOffsetXInIntrinsicPixels = 0;
-                renderedOffsetYInIntrinsicPixels =
-                    (videoIntrinsicHeight - renderedVideoHeightInIntrinsicPixels) / 2;
-            }
-
+            // Get the bounding rectangle of the vinScanArea (your yellow circle)
             const scanAreaRect = vinScanArea.getBoundingClientRect();
 
-            // Calculate scan area coordinates relative to the *container* in CSS pixels
-            const scanAreaX_css_relative_to_container_untransformed =
-                scanAreaRect.left - containerRect.left;
-            const scanAreaY_css_relative_to_container_untransformed =
-                scanAreaRect.top - containerRect.top;
+            // Calculate the scan area's position and size relative to the *video element itself*
+            // This accounts for how the video is displayed within its container
+            const scanAreaX_relative_to_video = scanAreaRect.left - video.getBoundingClientRect().left;
+            const scanAreaY_relative_to_video = scanAreaRect.top - video.getBoundingClientRect().top;
             const scanAreaWidth_css = scanAreaRect.width;
             const scanAreaHeight_css = scanAreaRect.height;
 
-            // Calculate the scaling factors from CSS pixels (of the rendered container) to intrinsic video pixels
-            const scaleFactorX_css_to_intrinsic =
-                renderedVideoWidthInIntrinsicPixels / containerWidth;
-            const scaleFactorY_css_to_intrinsic =
-                renderedVideoHeightInIntrinsicPixels / containerHeight;
-
-            // Calculate the final crop coordinates and dimensions in intrinsic video pixels
-            const cropX = Math.max(
-                0,
-                renderedOffsetXInIntrinsicPixels +
-                scanAreaX_css_relative_to_container_untransformed *
-                scaleFactorX_css_to_intrinsic
-            );
-            const cropY = Math.max(
-                0,
-                renderedOffsetYInIntrinsicPixels +
-                scanAreaY_css_relative_to_container_untransformed * // Corrected variable name
-                scaleFactorY_css_to_intrinsic
-            );
-            const cropWidth = scanAreaWidth_css * scaleFactorX_css_to_intrinsic;
-            const cropHeight = scanAreaHeight_css * scaleFactorY_css_to_intrinsic;
+            // Calculate the crop coordinates and dimensions in intrinsic video pixels
+            // This is the core correction: convert CSS pixels relative to the rendered video to intrinsic pixels
+            const cropX = scanAreaX_relative_to_video * scaleX_rendered_to_intrinsic;
+            const cropY = scanAreaY_relative_to_video * scaleY_rendered_to_intrinsic;
+            const cropWidth = scanAreaWidth_css * scaleX_rendered_to_intrinsic;
+            const cropHeight = scanAreaHeight_css * scaleY_rendered_to_intrinsic;
 
             // Set canvas dimensions to the calculated crop dimensions
             canvas.width = cropWidth;
@@ -735,7 +730,20 @@
     window.addEventListener("beforeunload", () => {
         if (stream) {
             stream.getTracks().forEach((track) => track.stop());
+            // Remove the class to revert background fade when camera is stopped (e.g., page close)
+            document.body.classList.remove('camera-active');
         }
+    });
+
+    // Handle the case where the camera is stopped explicitly by user or error
+    video.addEventListener('ended', () => {
+        // Only if camera was intentionally stopped or failed
+        // A small delay might be useful here if 'ended' fires too quickly after a brief pause
+        setTimeout(() => {
+            if (!cameraOn && !stream) { // Check if camera is truly off and stream is null
+                document.body.classList.remove('camera-active');
+            }
+        }, 100); // Small delay to ensure state is settled
     });
 </script>
 </body>
