@@ -493,7 +493,9 @@
                         content: [
                             {
                                 type: "text",
-                                text: "Extract the VIN, from the given image. You MUST ONLY return your answer in JSON format of {\"vin\": \"VIN-HERE\"}"
+                                text: "\"Extract the VIN from the given image. Return ONLY raw JSON without any markdown " +
+                                    "formatting, code blocks, or backticks. The response must be " +
+                                    "exactly: {\"vin\": \"VIN-HERE\"} or {} if no VIN is found."
                             },
                             {
                                 type: "image_url",
@@ -511,7 +513,7 @@
         try {
             vinBox.innerHTML = `<p>${isRescan ? 'Rescanning' : 'Scanning'} image for VIN...</p>`;
 
-            const response = await fetch("http://localhost:8080/llmapi/v1/chat/completions", {
+            const response = await fetch("http://localhost:8080/tradein/admin/llmapi/v1/chat/completions", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -549,14 +551,17 @@
     }
 
     function extractVin(data) {
+        debugger;
         if (data && data.choices && data.choices.length) {
             const choice = data.choices[0];
             const message = choice.message;
             if (message.role === "assistant") {
 
                 try {
-                    const content = JSON.parse(message.content);
-                    return content.vin;
+                    let content = message.content;
+                    content = content.replace(/```json\s*|\s*```/g, '').trim();
+                    const parsed = JSON.parse(content);
+                    return parsed.vin || null;
                 } catch (err) {
                     console.error(err);
                     return null;
